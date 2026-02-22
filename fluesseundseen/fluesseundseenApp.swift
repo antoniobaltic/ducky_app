@@ -1,11 +1,5 @@
-//
-//  fluesseundseenApp.swift
-//  fluesseundseen
-//
-//  Created by Antonio Baltic on 22.02.26.
-//
-
 import SwiftUI
+import SwiftData
 
 @main
 struct fluesseundseenApp: App {
@@ -13,5 +7,6 @@ struct fluesseundseenApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: FavouriteItem.self)
     }
 }
