@@ -21,7 +21,7 @@ struct MapView: View {
                         Annotation(lake.name, coordinate: lake.coordinate, anchor: .bottom) {
                             DuckPinView(state: lake.duckState)
                                 .scaleEffect(selectedLake?.id == lake.id ? 1.3 : 1.0)
-                                .animation(.spring(response: 0.3), value: selectedLake?.id)
+                                .animation(AppTheme.quickSpring, value: selectedLake?.id)
                         }
                         .tag(lake)
                     }
@@ -37,7 +37,7 @@ struct MapView: View {
                     MapScaleView()
                 }
 
-                // Bottom Sheet on selection
+                // Bottom sheet
                 if let lake = selectedLake {
                     lakeBottomSheet(lake)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -66,28 +66,34 @@ struct MapView: View {
 
     private func lakeBottomSheet(_ lake: BathingWater) -> some View {
         VStack(spacing: 0) {
-            // Handle
             Capsule()
-                .fill(.secondary.opacity(0.4))
+                .fill(AppTheme.divider)
                 .frame(width: 36, height: 5)
                 .padding(.top, 10)
 
-            HStack(spacing: 16) {
-                DuckBadge(state: lake.duckState, size: 64)
+            HStack(spacing: 14) {
+                DuckBadge(state: lake.duckState, size: 56)
                     .padding(.leading, 4)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(lake.name)
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1)
 
                     if let municipality = lake.municipality {
-                        Text(municipality)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Text(municipality)
+                            if let state = lake.state {
+                                Text("·")
+                                Text(state)
+                            }
+                        }
+                        .font(AppTheme.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
                     }
 
-                    HStack(spacing: 10) {
+                    HStack(spacing: 8) {
                         TemperatureBadge(temperature: lake.waterTemperature, size: .small)
                         QualityBadge(qualityLabel: lake.qualityLabel, qualityColor: lake.qualityColor)
                     }
@@ -95,21 +101,20 @@ struct MapView: View {
 
                 Spacer()
 
-                // Dismiss & detail buttons
                 VStack(spacing: 10) {
                     Button {
-                        withAnimation { selectedLake = nil }
+                        withAnimation(AppTheme.quickSpring) { selectedLake = nil }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.title2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.textSecondary)
                             .symbolRenderingMode(.hierarchical)
                     }
 
                     NavigationLink(destination: LakeDetailView(lake: lake)) {
                         Image(systemName: "chevron.right.circle.fill")
                             .font(.title2)
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(AppTheme.oceanBlue)
                             .symbolRenderingMode(.hierarchical)
                     }
                 }
@@ -117,15 +122,14 @@ struct MapView: View {
             }
             .padding(16)
         }
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(.white.opacity(0.25), lineWidth: 1)
+        .background(
+            AppTheme.cardBackground
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .shadow(color: .black.opacity(0.12), radius: 20, y: -4)
         )
-        .shadow(color: .black.opacity(0.15), radius: 20, y: -4)
         .padding(.horizontal, 16)
         .padding(.bottom, 28)
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: selectedLake?.id)
+        .animation(AppTheme.springAnimation, value: selectedLake?.id)
     }
 }
 

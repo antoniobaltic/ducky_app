@@ -2,14 +2,10 @@ import Foundation
 import CoreLocation
 import Observation
 
-// WeatherKit integration — requires the WeatherKit capability and entitlement.
-// When the capability is not configured, weather data returns nil and the UI
-// gracefully omits weather sections.
-
 struct LakeWeather {
-    let airTemperature: Double?   // °C
+    let airTemperature: Double?
     let uvIndex: Int?
-    let conditionSymbol: String   // SF Symbol name
+    let conditionSymbol: String
     let conditionDescription: String
     let feelsLike: Double?
 }
@@ -22,13 +18,30 @@ final class WeatherService {
     private init() {}
 
     func fetchWeather(for lake: BathingWater) async -> LakeWeather? {
-        let cacheKey = "\(lake.id)"
+        let cacheKey = lake.id
         if let cached = weatherCache[cacheKey] { return cached }
 
-        // WeatherKit fetch — wrapped in a do/catch so the app never crashes
-        // if the entitlement is missing.
+        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(lake.latitude)&longitude=\(lake.longitude)&current=temperature_2m,apparent_temperature,weather_code,uv_index&timezone=auto"
+        guard let url = URL(string: urlString) else { return nil }
+
         do {
-            let weather = try await fetchWeatherKit(latitude: lake.latitude, longitude: lake.longitude)
+            let (data, _) = try await URLSession.shared.data(from: url)
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let current = json["current"] as? [String: Any] else { return nil }
+
+            let airTemp = current["temperature_2m"] as? Double
+            let feelsLike = current["apparent_temperature"] as? Double
+            let weatherCode = (current["weather_code"] as? Int) ?? (current["weather_code"] as? Double).map(Int.init) ?? 0
+            let uvDouble = current["uv_index"] as? Double
+
+            let weather = LakeWeather(
+                airTemperature: airTemp,
+                uvIndex: uvDouble.map { Int($0.rounded()) },
+                conditionSymbol: symbolForWMOCode(weatherCode),
+                conditionDescription: descriptionForWMOCode(weatherCode),
+                feelsLike: feelsLike
+            )
+
             weatherCache[cacheKey] = weather
             return weather
         } catch {
@@ -36,36 +49,50 @@ final class WeatherService {
         }
     }
 
-    private func fetchWeatherKit(latitude: Double, longitude: Double) async throws -> LakeWeather {
-        // Dynamic WeatherKit usage to avoid compile-time entitlement issues.
-        // This uses reflection/runtime calls so the app compiles without the
-        // WeatherKit framework linked, and gracefully fails when unavailable.
-        throw WeatherError.notConfigured
+    // MARK: - WMO Weather Code Mapping
+
+    private func symbolForWMOCode(_ code: Int) -> String {
+        switch code {
+        case 0:           return "sun.max.fill"
+        case 1:           return "sun.min.fill"
+        case 2:           return "cloud.sun.fill"
+        case 3:           return "cloud.fill"
+        case 45, 48:      return "cloud.fog.fill"
+        case 51, 53, 55:  return "cloud.drizzle.fill"
+        case 56, 57:      return "cloud.sleet.fill"
+        case 61, 63, 65:  return "cloud.rain.fill"
+        case 66, 67:      return "cloud.sleet.fill"
+        case 71, 73, 75:  return "cloud.snow.fill"
+        case 77:          return "cloud.snow.fill"
+        case 80, 81, 82:  return "cloud.heavyrain.fill"
+        case 85, 86:      return "cloud.snow.fill"
+        case 95, 96, 99:  return "cloud.bolt.rain.fill"
+        default:          return "cloud.fill"
+        }
     }
 
-    enum WeatherError: Error {
-        case notConfigured
-        case unavailable
+    private func descriptionForWMOCode(_ code: Int) -> String {
+        switch code {
+        case 0:           return "Klar"
+        case 1:           return "Überwiegend klar"
+        case 2:           return "Teilweise bewölkt"
+        case 3:           return "Bewölkt"
+        case 45, 48:      return "Nebel"
+        case 51, 53, 55:  return "Nieselregen"
+        case 56, 57:      return "Gefrierender Nieselregen"
+        case 61:          return "Leichter Regen"
+        case 63:          return "Regen"
+        case 65:          return "Starker Regen"
+        case 66, 67:      return "Gefrierender Regen"
+        case 71:          return "Leichter Schneefall"
+        case 73:          return "Schneefall"
+        case 75:          return "Starker Schneefall"
+        case 77:          return "Schneegriesel"
+        case 80, 81, 82:  return "Regenschauer"
+        case 85, 86:      return "Schneeschauer"
+        case 95:          return "Gewitter"
+        case 96, 99:      return "Gewitter mit Hagel"
+        default:          return "Unbekannt"
+        }
     }
 }
-
-// Note: To enable real WeatherKit data:
-// 1. Add the WeatherKit capability in Xcode → Signing & Capabilities
-// 2. Enable WeatherKit in your Apple Developer account for this App ID
-// 3. Uncomment and implement the WeatherKit code below:
-//
-// import WeatherKit
-//
-// private func fetchWeatherKit(...) async throws -> LakeWeather {
-//     let location = CLLocation(latitude: latitude, longitude: longitude)
-//     let service = WeatherService.shared   // WeatherKit's WeatherService
-//     let weather = try await service.weather(for: location)
-//     let current = weather.currentWeather
-//     return LakeWeather(
-//         airTemperature: current.temperature.converted(to: .celsius).value,
-//         uvIndex: current.uvIndex.value,
-//         conditionSymbol: current.symbolName,
-//         conditionDescription: current.condition.description,
-//         feelsLike: current.apparentTemperature.converted(to: .celsius).value
-//     )
-// }

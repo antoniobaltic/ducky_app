@@ -7,7 +7,6 @@ struct IOSNavigationBarStyle: ViewModifier {
         #if os(iOS)
         content
             .navigationBarTitleDisplayMode(.large)
-            .toolbarColorScheme(.dark, for: .navigationBar)
         #else
         content
         #endif

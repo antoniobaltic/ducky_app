@@ -8,7 +8,7 @@ struct ShareCardView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                lake.duckState.backgroundGradient
+                AppTheme.pageBackground
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
@@ -26,135 +26,131 @@ struct ShareCardView: View {
             .toolbar {
                 ToolbarItem(placement: .iOSTopBarLeading) {
                     Button("Fertig") { dismiss() }
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
                 }
             }
         }
     }
 
-    // MARK: - The shareable card
+    // MARK: - Share Card
 
     var shareCard: some View {
         VStack(spacing: 0) {
-            // Header bar
+            // Header
             HStack {
-                Text("flüsse & seen")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.8))
+                HStack(spacing: 6) {
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 12))
+                    Text("Flüsse & Seen")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(.white.opacity(0.9))
                 Spacer()
-                Image(systemName: "drop.fill")
-                    .foregroundStyle(.white.opacity(0.7))
+                Text(lake.duckState.emoji)
+                    .font(.system(size: 16))
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 20)
-            .padding(.bottom, 8)
-            .background(lake.duckState.accentColor.opacity(0.6))
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(lake.duckState.accentColor)
 
-            // Main content
+            // Content
             VStack(spacing: 20) {
-                // Duck + state
                 VStack(spacing: 8) {
-                    DuckView(state: lake.duckState, size: 110)
+                    DuckView(state: lake.duckState, size: 100)
 
                     Text("\u{201E}\(lake.duckState.line)\u{201C}")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
                         .multilineTextAlignment(.center)
                 }
 
                 Divider()
 
-                // Lake info
-                VStack(spacing: 8) {
+                VStack(spacing: 6) {
                     Text(lake.name)
-                        .font(.system(size: 26, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.primary)
+                        .font(.system(size: 24, weight: .heavy, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
                         .multilineTextAlignment(.center)
 
                     if let municipality = lake.municipality {
-                        Text(municipality)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        Text(municipality + (lake.state.map { ", \($0)" } ?? ""))
+                            .font(AppTheme.caption)
+                            .foregroundStyle(AppTheme.textSecondary)
                     }
                 }
 
-                // Stats row
+                // Stats
                 HStack(spacing: 0) {
                     statCell(
-                        value: lake.waterTemperature.map { String(format: "%.1f°C", $0) } ?? "–",
+                        value: lake.temperatureDisplay,
                         label: "Wassertemp.",
-                        color: lake.temperatureColor
+                        color: lake.hasTemperature ? lake.temperatureColor : .gray
                     )
-
-                    Divider().frame(height: 40)
-
+                    Divider().frame(height: 36)
                     if let airTemp = weather?.airTemperature {
                         statCell(
                             value: String(format: "%.0f°C", airTemp),
                             label: "Lufttemp.",
-                            color: .orange
+                            color: AppTheme.coral
                         )
-                        Divider().frame(height: 40)
+                        Divider().frame(height: 36)
                     }
-
                     statCell(
                         value: lake.qualityLabel,
                         label: "Qualität",
                         color: lake.qualityColor
                     )
                 }
-                .frame(maxWidth: .infinity)
 
-                // Verdict sentence
                 Text(verdictSentence)
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 12)
 
-                // Date footer
-                Text("Stand: \(lake.measurementDate ?? "aktuell")")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 4)
+                if let date = lake.measurementDate {
+                    Text("Stand: \(date)")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.tertiary)
+                }
             }
             .padding(24)
-            .background(.regularMaterial)
+            .background(AppTheme.cardBackground)
         }
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: .black.opacity(0.18), radius: 24, y: 8)
+        .shadow(color: .black.opacity(0.12), radius: 24, y: 8)
     }
 
     private func statCell(value: String, label: String, color: Color) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundStyle(color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textSecondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
     }
 
     private var verdictSentence: String {
-        guard let temp = lake.waterTemperature else { return "Aktuelle Daten werden geladen." }
+        guard let temp = lake.waterTemperature else { return "Temperaturdaten momentan nicht verfügbar." }
         let tempStr = String(format: "%.1f", temp)
-        var parts: [String] = []
-        parts.append("\(tempStr)°C Wassertemp.")
+        var parts: [String] = ["\(tempStr)°C Wasser"]
         if let air = weather?.airTemperature {
             parts.append(String(format: "%.0f°C Luft", air))
         }
         let stats = parts.joined(separator: " · ")
 
         switch lake.duckState {
-        case .begeistert: return "\(stats) — Perfekte Bedingungen! 🦆💦"
-        case .zufrieden:  return "\(stats) — Angenehm zum Baden. 🦆"
-        case .zoegernd:   return "\(stats) — Nur für Mutige. 🦆🥶"
-        case .frierend:   return "\(stats) — Lieber warten. ❄️🦆"
-        case .warnend:    return "Wasserqualität aktuell mangelhaft. Bitte warten. ⚠️🦆"
+        case .begeistert: return "\(stats) — Perfekte Bedingungen!"
+        case .zufrieden:  return "\(stats) — Angenehm zum Baden."
+        case .zoegernd:   return "\(stats) — Nur für Mutige."
+        case .frierend:   return "\(stats) — Lieber warten."
+        case .warnend:    return "Wasserqualität aktuell mangelhaft."
         }
     }
 
@@ -166,26 +162,26 @@ struct ShareCardView: View {
             subject: Text(lake.name),
             message: Text(verdictSentence)
         ) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "square.and.arrow.up")
-                Text("Als Bild teilen")
-                    .fontWeight(.semibold)
+                Text("Teilen")
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
             }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(lake.duckState.accentColor, in: RoundedRectangle(cornerRadius: 16))
             .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(lake.duckState.accentColor, in: RoundedRectangle(cornerRadius: AppTheme.buttonRadius, style: .continuous))
+            .shadow(color: lake.duckState.accentColor.opacity(0.3), radius: 10, y: 5)
         }
     }
 
     private var shareText: String {
-        var lines = [
+        [
             "🦆 \(lake.name)",
             verdictSentence,
             "",
-            "flüsse & seen — Badegewässer Österreich"
-        ]
-        return lines.joined(separator: "\n")
+            "Flüsse & Seen — Badegewässer Österreich"
+        ].joined(separator: "\n")
     }
 }
 

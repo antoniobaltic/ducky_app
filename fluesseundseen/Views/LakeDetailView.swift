@@ -10,10 +10,12 @@ struct LakeDetailView: View {
     init(lake: BathingWater) {
         self.lake = lake
     }
+
     @Environment(WeatherService.self) private var weatherService
     @State private var weather: LakeWeather?
     @State private var showShareCard = false
     @State private var showBacteriaValues = false
+    @State private var appear = false
 
     private var isFavourite: Bool {
         favourites.contains { $0.lakeID == lake.id }
@@ -22,27 +24,22 @@ struct LakeDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Hero
                 heroSection
-
-                // Content
-                VStack(spacing: 16) {
-                    qualitySection
-                    if let weather { weatherSection(weather) }
-                    bacteriaSection
-                    if let depth = lake.visibilityDepth { visibilitySection(depth) }
-                    verdictCard
-                    routeButton
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 40)
+                contentSection
             }
         }
+        .background(AppTheme.pageBackground)
         .ignoresSafeArea(edges: .top)
         .iOSNavigationBarInline()
         .toolbar {
             ToolbarItem(placement: .iOSTopBarTrailing) {
-                favouriteButton
+                HStack(spacing: 12) {
+                    Button { showShareCard = true } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    favouriteButton
+                }
             }
         }
         .sheet(isPresented: $showShareCard) {
@@ -51,276 +48,366 @@ struct LakeDetailView: View {
         .task {
             weather = await weatherService.fetchWeather(for: lake)
         }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.6)) { appear = true }
+        }
     }
 
     // MARK: - Hero Section
 
     private var heroSection: some View {
         ZStack(alignment: .bottom) {
-            // Background gradient
             lake.duckState.backgroundGradient
                 .frame(height: 340)
+                .overlay(
+                    BubbleBackground(color: .white)
+                        .opacity(0.5)
+                )
 
             VStack(spacing: 0) {
                 Spacer()
 
-                // Duck
-                DuckView(state: lake.duckState, size: 140)
-                    .padding(.bottom, 8)
+                DuckView(state: lake.duckState, size: 130)
+                    .scaleEffect(appear ? 1 : 0.7)
+                    .opacity(appear ? 1 : 0)
+                    .padding(.bottom, 12)
 
-                // Lake name
-                Text(lake.name)
-                    .font(.system(size: 32, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.center)
+                VStack(spacing: 6) {
+                    Text(lake.name)
+                        .font(.system(size: 30, weight: .heavy, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .multilineTextAlignment(.center)
 
-                if let municipality = lake.municipality {
-                    Text(municipality + (lake.state.map { ", \($0)" } ?? ""))
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        if let municipality = lake.municipality {
+                            Text(municipality)
+                        }
+                        if let state = lake.state {
+                            Text("·")
+                            Text(state)
+                        }
+                    }
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+
+                    if lake.isClosed {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                            Text("Gesperrt")
+                            if let reason = lake.closureReason, !reason.isEmpty {
+                                Text("– \(reason)")
+                            }
+                        }
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(AppTheme.coral, in: Capsule())
+                        .padding(.top, 4)
+                    }
                 }
 
-                // Temperature big
+                // Temperature
                 TemperatureBadge(temperature: lake.waterTemperature, size: .hero)
-                    .padding(.top, 8)
+                    .padding(.top, 12)
 
                 // Duck quote
                 Text("\u{201E}\(lake.duckState.line)\u{201C}")
                     .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.textSecondary)
                     .italic()
-                    .padding(.top, 4)
+                    .padding(.top, 6)
 
-                Spacer(minLength: 32)
+                Spacer(minLength: 28)
             }
             .padding(.horizontal, 24)
         }
     }
 
-    // MARK: - Quality Section
+    // MARK: - Content
 
-    private var qualitySection: some View {
-        CardView {
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Wasserqualität")
-                        .font(.headline)
-                    Spacer()
-                    QualityBadge(qualityLabel: lake.qualityLabel, qualityColor: lake.qualityColor)
-                }
-
-                if let date = lake.measurementDate {
-                    HStack {
-                        Image(systemName: "calendar")
-                            .foregroundStyle(.secondary)
-                        Text("Gemessen am \(date)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                }
+    private var contentSection: some View {
+        VStack(spacing: 16) {
+            // Weather (always try to show)
+            if let weather {
+                weatherCard(weather)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-        }
-    }
 
-    // MARK: - Weather Section
+            qualityCard
+            bacteriaCard
 
-    private func weatherSection(_ weather: LakeWeather) -> some View {
-        CardView {
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Wetter vor Ort")
-                        .font(.headline)
-                    Spacer()
-                    Image(systemName: weather.conditionSymbol)
-                        .font(.title2)
-                        .symbolRenderingMode(.multicolor)
-                }
-
-                HStack(spacing: 24) {
-                    if let airTemp = weather.airTemperature {
-                        weatherStat(
-                            icon: "thermometer.medium",
-                            value: String(format: "%.0f°C", airTemp),
-                            label: "Luft"
-                        )
-                    }
-                    if let uv = weather.uvIndex {
-                        weatherStat(
-                            icon: "sun.max.fill",
-                            value: "\(uv)",
-                            label: "UV-Index"
-                        )
-                    }
-                    if let feels = weather.feelsLike {
-                        weatherStat(
-                            icon: "figure.walk",
-                            value: String(format: "%.0f°C", feels),
-                            label: "Gefühlt"
-                        )
-                    }
-                    Spacer()
-                }
+            if let depth = lake.visibilityDepth {
+                visibilityCard(depth)
             }
+
+            verdictCard
+            mapCard
+            routeButton
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 40)
     }
 
-    private func weatherStat(icon: String, value: String, label: String) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.title3)
-                .symbolRenderingMode(.multicolor)
-            Text(value)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
+    // MARK: - Weather Card
 
-    // MARK: - Bacteria Section
-
-    private var bacteriaSection: some View {
-        CardView {
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Bakteriologie")
-                        .font(.headline)
-                    Spacer()
-                    Button {
-                        withAnimation { showBacteriaValues.toggle() }
-                    } label: {
-                        Text(showBacteriaValues ? "Werte ausblenden" : "Werte anzeigen")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                TrafficLightRow(
-                    label: "E.coli",
-                    value: lake.eColi.map { String(format: "%.0f KBE/100ml", $0) },
-                    status: lake.eColiStatus,
-                    showValue: showBacteriaValues
-                )
-
-                Divider()
-
-                TrafficLightRow(
-                    label: "Enterokokken",
-                    value: lake.enterococci.map { String(format: "%.0f KBE/100ml", $0) },
-                    status: lake.enterococciStatus,
-                    showValue: showBacteriaValues
-                )
-            }
-        }
-    }
-
-    // MARK: - Visibility Section
-
-    private func visibilitySection(_ depth: Double) -> some View {
-        CardView {
+    private func weatherCard(_ weather: LakeWeather) -> some View {
+        VStack(spacing: 14) {
             HStack {
-                Image(systemName: "eye.fill")
-                    .font(.title3)
-                    .foregroundStyle(.blue)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Sichttiefe")
-                        .font(.headline)
-                    Text(String(format: "%.1f Meter", depth))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Image(systemName: "cloud.sun.fill")
+                        .font(.system(size: 18))
+                        .symbolRenderingMode(.multicolor)
+                    Text("Wetter vor Ort")
+                        .font(AppTheme.cardTitle)
+                        .foregroundStyle(AppTheme.textPrimary)
                 }
                 Spacer()
-                // Visual depth bar
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(.secondary.opacity(0.2))
-                        .frame(width: 80, height: 8)
-                    Capsule()
-                        .fill(.blue)
-                        .frame(width: min(CGFloat(depth / 8.0) * 80, 80), height: 8)
+                Image(systemName: weather.conditionSymbol)
+                    .font(.title2)
+                    .symbolRenderingMode(.multicolor)
+            }
+
+            HStack(spacing: 0) {
+                if let airTemp = weather.airTemperature {
+                    weatherStat(
+                        icon: "thermometer.medium",
+                        value: String(format: "%.0f°C", airTemp),
+                        label: "Lufttemperatur",
+                        color: AppTheme.coral
+                    )
+                }
+                if let uv = weather.uvIndex {
+                    weatherStat(
+                        icon: "sun.max.fill",
+                        value: "\(uv)",
+                        label: "UV-Index",
+                        color: AppTheme.sunshine
+                    )
+                }
+                if let feels = weather.feelsLike {
+                    weatherStat(
+                        icon: "person.fill",
+                        value: String(format: "%.0f°C", feels),
+                        label: "Gefühlt",
+                        color: AppTheme.lavender
+                    )
+                }
+            }
+
+            Text(weather.conditionDescription)
+                .font(AppTheme.caption)
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .appCard()
+    }
+
+    private func weatherStat(icon: String, value: String, label: String, color: Color) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundStyle(color)
+            Text(value)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+            Text(label)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Quality Card
+
+    private var qualityCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(lake.qualityColor)
+                    Text("Wasserqualität")
+                        .font(AppTheme.cardTitle)
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+                Spacer()
+                QualityBadge(qualityLabel: lake.qualityLabel, qualityColor: lake.qualityColor)
+            }
+
+            if let date = lake.measurementDate {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Text("Gemessen am \(date)")
+                        .font(AppTheme.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
                 }
             }
         }
+        .appCard()
+    }
+
+    // MARK: - Bacteria Card
+
+    private var bacteriaCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                HStack(spacing: 8) {
+                    Image(systemName: "allergens")
+                        .font(.system(size: 18))
+                        .foregroundStyle(AppTheme.teal)
+                    Text("Bakteriologie")
+                        .font(AppTheme.cardTitle)
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+                Spacer()
+                Button {
+                    withAnimation(AppTheme.quickSpring) { showBacteriaValues.toggle() }
+                } label: {
+                    Text(showBacteriaValues ? "Ausblenden" : "Details")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.oceanBlue)
+                }
+            }
+
+            TrafficLightRow(
+                label: "E.coli",
+                value: lake.eColi.map { String(format: "%.0f KBE/100ml", $0) },
+                status: lake.eColiStatus,
+                showValue: showBacteriaValues
+            )
+
+            Divider()
+
+            TrafficLightRow(
+                label: "Enterokokken",
+                value: lake.enterococci.map { String(format: "%.0f KBE/100ml", $0) },
+                status: lake.enterococciStatus,
+                showValue: showBacteriaValues
+            )
+        }
+        .appCard()
+    }
+
+    // MARK: - Visibility Card
+
+    private func visibilityCard(_ depth: Double) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: "eye.fill")
+                .font(.system(size: 20))
+                .foregroundStyle(AppTheme.skyBlue)
+                .frame(width: 40, height: 40)
+                .background(AppTheme.skyBlue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Sichttiefe")
+                    .font(AppTheme.cardTitle)
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text(String(format: "%.1f Meter", depth))
+                    .font(AppTheme.bodyText)
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+
+            Spacer()
+
+            // Visual depth bar
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(AppTheme.divider)
+                    .frame(width: 80, height: 8)
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [AppTheme.skyBlue, AppTheme.oceanBlue],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                    )
+                    .frame(width: min(CGFloat(depth / 8.0) * 80, 80), height: 8)
+            }
+        }
+        .appCard()
     }
 
     // MARK: - Verdict Card
 
     private var verdictCard: some View {
-        Button {
-            showShareCard = true
-        } label: {
-            CardView {
-                HStack(spacing: 16) {
-                    DuckBadge(state: lake.duckState, size: 54)
+        HStack(spacing: 16) {
+            DuckBadge(state: lake.duckState, size: 54)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Lohnt es sich?")
-                            .font(.headline)
-                        Text(verdictSentence)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.leading)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Duckys Urteil")
+                    .font(AppTheme.cardTitle)
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text(verdictSentence)
+                    .font(AppTheme.bodyText)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+
+            Spacer()
         }
-        .buttonStyle(.plain)
+        .appCard()
     }
 
     private var verdictSentence: String {
+        if lake.isClosed {
+            return "Dieses Gewässer ist aktuell gesperrt."
+        }
         guard let temp = lake.waterTemperature else {
-            return "Keine aktuellen Temperaturdaten."
+            return "Keine aktuellen Temperaturdaten verfügbar."
         }
         let tempStr = String(format: "%.1f°C", temp)
         switch lake.duckState {
-        case .begeistert:
-            return "\(tempStr) Wassertemperatur — perfekte Bedingungen!"
-        case .zufrieden:
-            return "\(tempStr) Wassertemperatur — angenehm für die meisten."
-        case .zoegernd:
-            return "\(tempStr) Wassertemperatur — nur für Mutige."
-        case .frierend:
-            return "\(tempStr) Wassertemperatur — besser warten."
-        case .warnend:
-            return "Die Wasserqualität ist aktuell mangelhaft."
+        case .begeistert: return "\(tempStr) Wassertemperatur — perfekte Bedingungen!"
+        case .zufrieden:  return "\(tempStr) Wassertemperatur — angenehm zum Baden."
+        case .zoegernd:   return "\(tempStr) Wassertemperatur — nur für Mutige."
+        case .frierend:   return "\(tempStr) Wassertemperatur — besser warten."
+        case .warnend:    return "Die Wasserqualität ist aktuell mangelhaft."
         }
+    }
+
+    // MARK: - Map Card
+
+    private var mapCard: some View {
+        Map {
+            Marker(lake.name, coordinate: lake.coordinate)
+                .tint(lake.qualityColor)
+        }
+        .frame(height: 180)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.06), radius: 12, y: 4)
+        .allowsHitTesting(false)
     }
 
     // MARK: - Route Button
 
     private var routeButton: some View {
-        Button {
-            openInMaps()
-        } label: {
-            HStack {
+        Button { openInMaps() } label: {
+            HStack(spacing: 8) {
                 Image(systemName: "map.fill")
-                Text("Route via Apple Maps")
-                    .fontWeight(.semibold)
+                Text("Route in Apple Maps")
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
             }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(.blue, in: RoundedRectangle(cornerRadius: 16))
             .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(AppTheme.oceanBlue, in: RoundedRectangle(cornerRadius: AppTheme.buttonRadius, style: .continuous))
+            .shadow(color: AppTheme.oceanBlue.opacity(0.3), radius: 10, y: 5)
         }
     }
 
-    // MARK: - Favourite Toggle
+    // MARK: - Favourite
 
     private var favouriteButton: some View {
-        Button {
-            toggleFavourite()
-        } label: {
+        Button { toggleFavourite() } label: {
             Image(systemName: isFavourite ? "heart.fill" : "heart")
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(isFavourite ? .pink : .primary)
-                .font(.title3)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(isFavourite ? AppTheme.warmPink : .primary)
+                .symbolEffect(.bounce, value: isFavourite)
         }
     }
 
@@ -352,20 +439,14 @@ struct LakeDetailView: View {
     }
 }
 
-// MARK: - Card container
+// MARK: - Card Container (legacy compat)
 
 struct CardView<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
         content
-            .padding(16)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(.white.opacity(0.3), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
+            .appCard()
     }
 }
 

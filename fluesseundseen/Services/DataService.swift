@@ -9,9 +9,14 @@ final class DataService {
     var error: String?
     var lastFetch: Date?
 
+    /// All unique states from the loaded data
+    var availableStates: [String] {
+        Array(Set(lakes.compactMap(\.state))).sorted()
+    }
+
     private let cacheKey = "cached_badegewaesser"
     private let cacheTimestampKey = "cached_badegewaesser_timestamp"
-    private let cacheExpirySeconds: TimeInterval = 24 * 60 * 60 // 24 hours
+    private let cacheExpirySeconds: TimeInterval = 24 * 60 * 60
     private let apiURL = URL(string: "https://www.ages.at/typo3temp/badegewaesser_db.json")!
 
     static let shared = DataService()
@@ -21,7 +26,6 @@ final class DataService {
     // MARK: - Public
 
     func loadData() async {
-        // Return cached data immediately if fresh
         if let cached = loadFromCache() {
             lakes = cached
             return
@@ -51,7 +55,6 @@ final class DataService {
             }
             saveToCache(data: data)
         } catch {
-            // Fall back to cached data even if expired
             if let cached = loadFromCache(ignoreExpiry: true) {
                 await MainActor.run {
                     lakes = cached
@@ -62,43 +65,54 @@ final class DataService {
                 await MainActor.run {
                     self.error = "Keine Verbindung möglich."
                     isLoading = false
-                    // Load sample data so app is still usable
                     lakes = BathingWater.previews
                 }
             }
         }
     }
 
-    // MARK: - Parsing
+    // MARK: - Parsing (AGES nested format)
 
     private func parse(data: Data) throws -> [BathingWater] {
         guard let json = try JSONSerialization.jsonObject(with: data) as? Any else {
             throw DataError.invalidFormat
         }
 
-        let rawArray: [[String: Any]]
+        var allEntries: [BathingWater] = []
 
-        if let arr = json as? [[String: Any]] {
-            rawArray = arr
-        } else if let obj = json as? [String: Any] {
-            // Try common wrapper keys
-            let wrapperKeys = ["badegewaesser", "data", "features", "items", "results"]
-            var found: [[String: Any]]?
-            for key in wrapperKeys {
-                if let arr = obj[key] as? [[String: Any]] {
-                    found = arr
-                    break
+        if let obj = json as? [String: Any] {
+            // AGES format: { BUNDESLAENDER: [{ BUNDESLAND: "...", BADEGEWAESSER: [...] }] }
+            if let bundeslaender = obj["BUNDESLAENDER"] as? [[String: Any]] {
+                for stateObj in bundeslaender {
+                    let stateName = stateObj["BUNDESLAND"] as? String
+                    if let badegewaesser = stateObj["BADEGEWAESSER"] as? [[String: Any]] {
+                        for entry in badegewaesser {
+                            if let bw = BathingWater.decode(from: entry, state: stateName) {
+                                allEntries.append(bw)
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Fallback: try common wrapper keys
+                let wrapperKeys = ["badegewaesser", "data", "features", "items", "results"]
+                var found: [[String: Any]]?
+                for key in wrapperKeys {
+                    if let arr = obj[key] as? [[String: Any]] {
+                        found = arr
+                        break
+                    }
+                }
+                if let arr = found {
+                    allEntries = arr.compactMap { BathingWater.decode(from: $0) }
                 }
             }
-            guard let arr = found else { throw DataError.invalidFormat }
-            rawArray = arr
-        } else {
-            throw DataError.invalidFormat
+        } else if let arr = json as? [[String: Any]] {
+            allEntries = arr.compactMap { BathingWater.decode(from: $0) }
         }
 
-        let parsed = rawArray.compactMap { BathingWater.decode(from: $0) }
-        guard !parsed.isEmpty else { throw DataError.emptyResponse }
-        return parsed
+        guard !allEntries.isEmpty else { throw DataError.emptyResponse }
+        return allEntries
     }
 
     // MARK: - Cache
@@ -126,7 +140,7 @@ final class DataService {
     }
 }
 
-// MARK: - Filtering Helpers
+// MARK: - Filtering & Sorting
 
 extension DataService {
     func sortedByDistance(from userLocation: CLLocation?) -> [BathingWater] {
@@ -138,6 +152,21 @@ extension DataService {
         lakes
             .filter { $0.waterTemperature != nil }
             .sorted { ($0.waterTemperature ?? 0) > ($1.waterTemperature ?? 0) }
+    }
+
+    func filtered(by state: String?) -> [BathingWater] {
+        guard let state else { return lakes }
+        return lakes.filter { $0.state == state }
+    }
+
+    func search(_ query: String) -> [BathingWater] {
+        guard !query.isEmpty else { return lakes }
+        let lowered = query.lowercased()
+        return lakes.filter {
+            $0.name.lowercased().contains(lowered) ||
+            ($0.municipality?.lowercased().contains(lowered) ?? false) ||
+            ($0.state?.lowercased().contains(lowered) ?? false)
+        }
     }
 
     func lake(withID id: String) -> BathingWater? {

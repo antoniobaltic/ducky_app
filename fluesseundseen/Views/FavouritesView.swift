@@ -7,7 +7,6 @@ struct FavouritesView: View {
     @Environment(LocationService.self) private var locationService
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \FavouriteItem.addedAt, order: .reverse) var favourites: [FavouriteItem]
-    @State private var notificationsRequested = false
 
     init() {
         _favourites = Query(sort: \FavouriteItem.addedAt, order: .reverse)
@@ -20,11 +19,8 @@ struct FavouritesView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LinearGradient(
-                    colors: [Color(red: 0.48, green: 0.78, blue: 1.00), Color(red: 0.30, green: 0.58, blue: 0.92)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                AppTheme.pageBackground
+                    .ignoresSafeArea()
 
                 if favourites.isEmpty {
                     emptyState
@@ -40,10 +36,8 @@ struct FavouritesView: View {
                 }
             }
             .navigationTitle("Favoriten")
-            .iOSNavigationBarStyle()
             .task {
                 await dataService.loadData()
-                // Sync cached data for favourites
                 for fav in favourites {
                     if let live = liveData(for: fav) {
                         fav.lastKnownTemperature = live.waterTemperature
@@ -57,15 +51,30 @@ struct FavouritesView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 20) {
-            DuckView(state: .zufrieden, size: 120)
-            Text("Noch keine Favoriten")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-            Text("Tippe das ❤️ auf einem See,\num ihn hier zu speichern.")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.75))
-                .multilineTextAlignment(.center)
+        VStack(spacing: 24) {
+            ZStack {
+                Circle()
+                    .fill(AppTheme.warmPink.opacity(0.08))
+                    .frame(width: 160, height: 160)
+
+                DuckView(state: .zufrieden, size: 120)
+            }
+
+            VStack(spacing: 8) {
+                Text("Noch keine Favoriten")
+                    .font(.system(size: 24, weight: .heavy, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+
+                Text("Tippe auf das Herz bei einem See,\num ihn hier zu speichern.")
+                    .font(AppTheme.bodyText)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+            }
+
+            Image(systemName: "heart.fill")
+                .font(.system(size: 32))
+                .foregroundStyle(AppTheme.warmPink.opacity(0.3))
         }
         .padding()
     }
@@ -74,24 +83,23 @@ struct FavouritesView: View {
 
     private func favouriteRow(_ fav: FavouriteItem) -> some View {
         let live = liveData(for: fav)
-        let lake = live
         let temp = live?.waterTemperature ?? fav.lastKnownTemperature
         let quality = live?.qualityRating ?? fav.lastKnownQuality
         let duckState = live?.duckState ?? .zufrieden
 
         return NavigationLink(destination: destinationView(for: fav)) {
             HStack(spacing: 14) {
-                DuckBadge(state: duckState, size: 52)
+                DuckBadge(state: duckState, size: 48)
 
                 VStack(alignment: .leading, spacing: 5) {
                     Text(fav.lakeName)
                         .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(AppTheme.textPrimary)
 
                     if let municipality = fav.municipalityName {
                         Text(municipality)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(AppTheme.caption)
+                            .foregroundStyle(AppTheme.textSecondary)
                     }
 
                     if let q = quality {
@@ -99,8 +107,8 @@ struct FavouritesView: View {
                         HStack(spacing: 5) {
                             Circle().fill(color).frame(width: 7, height: 7)
                             Text(qualityLabel(for: q))
-                                .font(.caption.bold())
-                                .foregroundStyle(.secondary)
+                                .font(AppTheme.smallCaption)
+                                .foregroundStyle(AppTheme.textSecondary)
                         }
                     }
                 }
@@ -110,24 +118,19 @@ struct FavouritesView: View {
                 VStack(alignment: .trailing, spacing: 8) {
                     TemperatureBadge(temperature: temp, size: .small)
 
-                    // Notification toggle
                     Button {
                         toggleNotifications(for: fav)
                     } label: {
                         Image(systemName: fav.notificationsEnabled ? "bell.fill" : "bell")
-                            .font(.callout)
-                            .foregroundStyle(fav.notificationsEnabled ? .orange : .secondary)
+                            .font(.system(size: 14))
+                            .foregroundStyle(fav.notificationsEnabled ? AppTheme.sunshine : AppTheme.textSecondary)
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(16)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(.white.opacity(0.3), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.07), radius: 8, y: 3)
+            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
+            .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -144,8 +147,14 @@ struct FavouritesView: View {
         if let live = liveData(for: fav) {
             LakeDetailView(lake: live)
         } else {
-            Text("Keine aktuellen Daten verfügbar")
-                .foregroundStyle(.secondary)
+            VStack(spacing: 16) {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 40))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Text("Keine aktuellen Daten verfügbar")
+                    .font(AppTheme.bodyText)
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
         }
     }
 
@@ -171,7 +180,7 @@ struct FavouritesView: View {
         guard let temp = fav.lastKnownTemperature, temp >= 20 else { return }
         let content = UNMutableNotificationContent()
         content.title = fav.lakeName
-        content.body = String(format: "%.1f°C erreicht! 🦆 Spring rein!", temp)
+        content.body = String(format: "%.1f°C erreicht! Ducky sagt: Spring rein!", temp)
         content.sound = .default
 
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 60 * 60 * 8, repeats: true)
@@ -186,20 +195,30 @@ struct FavouritesView: View {
     // MARK: - Helpers
 
     private func qualityColor(for rating: String) -> Color {
-        let r = rating.lowercased()
-        if r.contains("ausgezeichnet") { return .green }
-        if r.contains("gut") { return Color(red: 0.6, green: 0.85, blue: 0.2) }
-        if r.contains("ausreichend") { return .orange }
-        return .red
+        let r = rating.uppercased()
+        switch r {
+        case "A": return AppTheme.freshGreen
+        case "G": return AppTheme.teal
+        case "AU": return .orange
+        case "M": return AppTheme.coral
+        default:
+            let low = r.lowercased()
+            if low.contains("ausgezeichnet") { return AppTheme.freshGreen }
+            if low.contains("gut") { return AppTheme.teal }
+            if low.contains("ausreichend") { return .orange }
+            return AppTheme.coral
+        }
     }
 
     private func qualityLabel(for rating: String) -> String {
-        let r = rating.lowercased()
-        if r.contains("ausgezeichnet") { return "Ausgezeichnet" }
-        if r.contains("gut") { return "Gut" }
-        if r.contains("ausreichend") { return "Ausreichend" }
-        if r.contains("mangelhaft") { return "Mangelhaft" }
-        return rating
+        let r = rating.uppercased()
+        switch r {
+        case "A": return "Ausgezeichnet"
+        case "G": return "Gut"
+        case "AU": return "Ausreichend"
+        case "M": return "Mangelhaft"
+        default: return rating
+        }
     }
 }
 

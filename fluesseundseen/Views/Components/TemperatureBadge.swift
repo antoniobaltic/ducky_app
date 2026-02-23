@@ -12,7 +12,7 @@ struct TemperatureBadge: View {
             case .small:  return .system(size: 14, weight: .bold, design: .rounded)
             case .medium: return .system(size: 20, weight: .bold, design: .rounded)
             case .large:  return .system(size: 28, weight: .heavy, design: .rounded)
-            case .hero:   return .system(size: 56, weight: .heavy, design: .rounded)
+            case .hero:   return .system(size: 52, weight: .heavy, design: .rounded)
             }
         }
 
@@ -21,7 +21,7 @@ struct TemperatureBadge: View {
             case .small:  return .system(size: 10, weight: .semibold, design: .rounded)
             case .medium: return .system(size: 12, weight: .semibold, design: .rounded)
             case .large:  return .system(size: 16, weight: .semibold, design: .rounded)
-            case .hero:   return .system(size: 24, weight: .semibold, design: .rounded)
+            case .hero:   return .system(size: 22, weight: .semibold, design: .rounded)
             }
         }
 
@@ -46,75 +46,97 @@ struct TemperatureBadge: View {
 
     private var color: Color {
         guard let temp = temperature else { return .gray }
-        if temp > 22 { return Color(red: 1.0, green: 0.40, blue: 0.15) }
-        if temp >= 18 { return Color(red: 0.15, green: 0.72, blue: 0.38) }
-        if temp >= 14 { return Color(red: 0.15, green: 0.58, blue: 0.85) }
-        return Color(red: 0.28, green: 0.38, blue: 0.90)
+        if temp > 22 { return AppTheme.coral }
+        if temp >= 18 { return AppTheme.freshGreen }
+        if temp >= 14 { return AppTheme.skyBlue }
+        return AppTheme.oceanBlue
     }
 
     var body: some View {
         if size == .hero {
             heroView
-        } else {
+        } else if temperature != nil {
             badgeView
+        } else {
+            unavailableBadge
         }
     }
 
     private var heroView: some View {
-        HStack(alignment: .top, spacing: 2) {
-            Text(formattedTemp)
-                .font(size.font)
-                .foregroundStyle(color)
-            Text("°C")
-                .font(size.unitFont)
-                .foregroundStyle(color.opacity(0.8))
-                .padding(.top, 10)
+        Group {
+            if let temp = temperature {
+                HStack(alignment: .top, spacing: 2) {
+                    Text(String(format: "%.1f", temp))
+                        .font(size.font)
+                        .foregroundStyle(color)
+                    Text("°C")
+                        .font(size.unitFont)
+                        .foregroundStyle(color.opacity(0.7))
+                        .padding(.top, 8)
+                }
+            } else {
+                VStack(spacing: 4) {
+                    Image(systemName: "thermometer.medium.slash")
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text("Nicht verfügbar")
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
     private var badgeView: some View {
         HStack(spacing: 2) {
-            Text(formattedTemp)
+            Text(String(format: "%.1f", temperature ?? 0))
                 .font(size.font)
             Text("°C")
                 .font(size.unitFont)
-                .opacity(0.8)
+                .opacity(0.85)
         }
         .foregroundStyle(.white)
         .padding(size.padding)
         .background(
-            RoundedRectangle(cornerRadius: size.cornerRadius)
+            RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
                 .fill(color)
-                .shadow(color: color.opacity(0.4), radius: 4, y: 2)
+                .shadow(color: color.opacity(0.35), radius: 4, y: 2)
         )
     }
 
-    private var formattedTemp: String {
-        guard let temp = temperature else { return "–" }
-        return String(format: "%.1f", temp)
+    private var unavailableBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "thermometer.medium.slash")
+                .font(.system(size: size == .small ? 10 : 12))
+            Text("n/a")
+                .font(size == .small ?
+                    .system(size: 11, weight: .medium, design: .rounded) :
+                    .system(size: 13, weight: .medium, design: .rounded))
+        }
+        .foregroundStyle(.secondary)
+        .padding(size.padding)
+        .background(
+            RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
+                .fill(Color.gray.opacity(0.12))
+        )
     }
 }
 
 #Preview {
-    HStack(spacing: 16) {
-        VStack(spacing: 12) {
+    VStack(spacing: 16) {
+        HStack(spacing: 12) {
             TemperatureBadge(temperature: 24.5, size: .small)
             TemperatureBadge(temperature: 20.0, size: .small)
-            TemperatureBadge(temperature: 16.0, size: .small)
-            TemperatureBadge(temperature: 11.0, size: .small)
             TemperatureBadge(temperature: nil, size: .small)
         }
-        VStack(spacing: 12) {
+        HStack(spacing: 12) {
             TemperatureBadge(temperature: 24.5, size: .medium)
-            TemperatureBadge(temperature: 20.0, size: .medium)
-            TemperatureBadge(temperature: 16.0, size: .medium)
-            TemperatureBadge(temperature: 11.0, size: .medium)
+            TemperatureBadge(temperature: nil, size: .medium)
         }
-        VStack(spacing: 12) {
-            TemperatureBadge(temperature: 24.5, size: .large)
-            TemperatureBadge(temperature: 20.0, size: .large)
-        }
+        TemperatureBadge(temperature: 24.5, size: .large)
+        TemperatureBadge(temperature: nil, size: .hero)
+        TemperatureBadge(temperature: 22.3, size: .hero)
     }
     .padding()
-    .background(Color(white: 0.95))
+    .background(AppTheme.pageBackground)
 }
