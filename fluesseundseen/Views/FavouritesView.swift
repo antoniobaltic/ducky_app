@@ -26,12 +26,20 @@ struct FavouritesView: View {
                     emptyState
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(favourites) { fav in
-                                favouriteRow(fav)
+                        VStack(spacing: 0) {
+                            // Subtle wave header
+                            WaveDivider(color: AppTheme.warmPink, height: 20)
+                                .opacity(0.5)
+                                .padding(.bottom, 4)
+
+                            LazyVStack(spacing: 12) {
+                                ForEach(favourites) { fav in
+                                    favouriteRow(fav)
+                                }
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 16)
                         }
-                        .padding(16)
                     }
                 }
             }
@@ -51,32 +59,47 @@ struct FavouritesView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 24) {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.warmPink.opacity(0.08))
-                    .frame(width: 160, height: 160)
-
-                DuckView(state: .zufrieden, size: 120)
+        ZStack {
+            // Subtle water background
+            VStack {
+                Spacer()
+                WaterWaveView(baseColor: AppTheme.skyBlue, height: 50, speed: 0.5)
+                    .frame(height: 50)
+                    .opacity(0.25)
             }
+            .ignoresSafeArea()
 
-            VStack(spacing: 8) {
-                Text("Noch keine Favoriten")
-                    .font(.system(size: 24, weight: .heavy, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
+            VStack(spacing: 24) {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.warmPink.opacity(0.08))
+                        .frame(width: 160, height: 160)
 
-                Text("Tippe auf das Herz bei einem See,\num ihn hier zu speichern.")
-                    .font(AppTheme.bodyText)
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
+                    FloatingBubblesView(count: 4, color: AppTheme.warmPink.opacity(0.2))
+                        .frame(width: 180, height: 180)
+
+                    DuckView(state: .zufrieden, size: 120)
+                }
+
+                VStack(spacing: 8) {
+                    Text("Noch keine Favoriten")
+                        .font(.system(size: 24, weight: .heavy, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+
+                    Text("Tippe auf das Herz bei einem See,\num ihn hier zu speichern.")
+                        .font(AppTheme.bodyText)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                }
+
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(AppTheme.warmPink.opacity(0.3))
+                    .symbolEffect(.pulse, options: .repeating)
             }
-
-            Image(systemName: "heart.fill")
-                .font(.system(size: 32))
-                .foregroundStyle(AppTheme.warmPink.opacity(0.3))
+            .padding()
         }
-        .padding()
     }
 
     // MARK: - Favourite Row
@@ -116,7 +139,7 @@ struct FavouritesView: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 8) {
-                    TemperatureBadge(temperature: temp, size: .small)
+                    TemperatureBadge(temperature: temp, size: .small, isOutdated: live?.isTemperatureOutdated ?? Season.isOffSeason)
 
                     Button {
                         toggleNotifications(for: fav)

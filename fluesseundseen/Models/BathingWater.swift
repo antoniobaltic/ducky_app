@@ -28,6 +28,23 @@ struct BathingWater: Identifiable, Hashable {
         CLLocation(latitude: latitude, longitude: longitude)
     }
 
+    // MARK: - Temperature Freshness
+
+    /// Whether the water temperature data is outdated (outside current summer season)
+    var isTemperatureOutdated: Bool {
+        Season.isMeasurementOutdated(measurementDate)
+    }
+
+    /// Parsed measurement date from "DD.MM.YYYY" string
+    var parsedMeasurementDate: Date? {
+        Season.parseMeasurementDate(measurementDate)
+    }
+
+    /// Year of measurement, e.g. "2025"
+    var measurementYear: String? {
+        Season.measurementYear(from: measurementDate)
+    }
+
     // MARK: - Computed Properties
 
     var duckState: DuckState {
@@ -35,6 +52,10 @@ struct BathingWater: Identifiable, Hashable {
         if let rating = qualityRating?.uppercased(),
            rating == "M" || rating.contains("MANGELHAFT") || rating.contains("POOR") {
             return .warnend
+        }
+        // Off-season: don't interpret stale temperatures as if current
+        if isTemperatureOutdated {
+            return Season.current.duckState
         }
         guard let temp = waterTemperature else { return .zufrieden }
         if temp > 22 { return .begeistert }

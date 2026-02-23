@@ -108,7 +108,11 @@ struct ShareCardView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 12)
 
-                if let date = lake.measurementDate {
+                if lake.isTemperatureOutdated {
+                    Text("Letzte Messung: \(lake.measurementDate ?? "unbekannt") · Daten: AGES")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.tertiary)
+                } else if let date = lake.measurementDate {
                     Text("Stand: \(date)")
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(.tertiary)
@@ -137,6 +141,14 @@ struct ShareCardView: View {
     }
 
     private var verdictSentence: String {
+        // Outdated: don't present stale data as current conditions
+        if lake.isTemperatureOutdated {
+            if let temp = lake.waterTemperature {
+                return "Letzte Messung: \(String(format: "%.1f", temp))°C. Neue Daten ab Juni."
+            }
+            return "Daten vom letzten Sommer. Neue Messungen ab Juni."
+        }
+
         guard let temp = lake.waterTemperature else { return "Temperaturdaten momentan nicht verfügbar." }
         let tempStr = String(format: "%.1f", temp)
         var parts: [String] = ["\(tempStr)°C Wasser"]

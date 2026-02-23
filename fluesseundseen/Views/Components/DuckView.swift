@@ -1,21 +1,25 @@
 import SwiftUI
 
-// MARK: - Ducky Mascot
+// MARK: - Ducky Mascot (cute rubber duck style)
 
 struct DuckView: View {
     let state: DuckState
     var size: CGFloat = 120
 
     @State private var bobOffset: CGFloat = 0
-    @State private var blinkOpacity: Double = 1
+    @State private var blinkScale: CGFloat = 1
     @State private var wingAngle: Double = 0
     @State private var blushOpacity: Double = 0
-    @State private var sparkleRotation: Double = 0
+    @State private var sparkleOpacity: Double = 0
 
-    private var scale: CGFloat { size / 120 }
+    private var s: CGFloat { size / 120 }
 
     var body: some View {
         ZStack {
+            // Water ripple under duck
+            waterRipple
+
+            // Duck
             duckBody
         }
         .frame(width: size, height: size)
@@ -23,396 +27,354 @@ struct DuckView: View {
         .onChange(of: state) { startAnimations() }
     }
 
-    // MARK: - Body Parts
+    // MARK: - Water ripple beneath
+
+    private var waterRipple: some View {
+        ZStack {
+            Ellipse()
+                .fill(state.accentColor.opacity(0.06))
+                .frame(width: 80 * s, height: 16 * s)
+                .offset(y: 44 * s + bobOffset)
+                .blur(radius: 4 * s)
+            Ellipse()
+                .fill(state.accentColor.opacity(0.04))
+                .frame(width: 100 * s, height: 12 * s)
+                .offset(y: 47 * s + bobOffset)
+                .blur(radius: 6 * s)
+        }
+    }
+
+    // MARK: - Duck body
 
     private var duckBody: some View {
-        ZStack(alignment: .center) {
-            // Shadow
-            Ellipse()
-                .fill(.black.opacity(0.06))
-                .frame(width: 72 * scale, height: 16 * scale)
-                .offset(y: 48 * scale)
-                .blur(radius: 6 * scale)
-
-            // Feet
-            HStack(spacing: 10 * scale) {
-                Capsule()
-                    .fill(state.billColor.opacity(0.8))
-                    .frame(width: 14 * scale, height: 6 * scale)
-                    .rotationEffect(.degrees(-8))
-                Capsule()
-                    .fill(state.billColor.opacity(0.8))
-                    .frame(width: 14 * scale, height: 6 * scale)
-                    .rotationEffect(.degrees(8))
-            }
-            .offset(y: 44 * scale + bobOffset)
-
-            // Main body
+        ZStack {
+            // Body (big round oval - rubber duck style)
             Ellipse()
                 .fill(
-                    RadialGradient(
-                        colors: [state.bodyColor, state.bodyColor.opacity(0.78)],
-                        center: .init(x: 0.38, y: 0.32),
-                        startRadius: 2,
-                        endRadius: 55 * scale
+                    EllipticalGradient(
+                        colors: [
+                            state.bodyColor,
+                            state.bodyColor.opacity(0.85),
+                            state.bodyColor.opacity(0.7)
+                        ],
+                        center: .init(x: 0.4, y: 0.3),
+                        startRadiusFraction: 0.0,
+                        endRadiusFraction: 0.7
                     )
                 )
-                .frame(width: 74 * scale, height: 58 * scale)
-                .offset(y: 18 * scale + bobOffset)
+                .frame(width: 70 * s, height: 52 * s)
+                .offset(y: 20 * s + bobOffset)
 
-            // Belly highlight
+            // Belly shine
             Ellipse()
-                .fill(.white.opacity(0.18))
-                .frame(width: 46 * scale, height: 32 * scale)
-                .offset(x: -4 * scale, y: 22 * scale + bobOffset)
+                .fill(.white.opacity(0.22))
+                .frame(width: 38 * s, height: 26 * s)
+                .offset(x: -6 * s, y: 24 * s + bobOffset)
+                .blur(radius: 2 * s)
 
             // Wing
-            DuckWing(scale: scale, state: state)
-                .offset(x: 14 * scale, y: 24 * scale + bobOffset)
-                .rotationEffect(.degrees(wingAngle), anchor: .topLeading)
+            wing
+                .offset(x: 18 * s, y: 24 * s + bobOffset)
+                .rotationEffect(.degrees(wingAngle), anchor: .leading)
 
-            // Tail
-            DuckTail(scale: scale, state: state)
-                .offset(x: -32 * scale, y: 8 * scale + bobOffset)
+            // Tail feathers
+            tail
+                .offset(x: -32 * s, y: 10 * s + bobOffset)
 
-            // Head
+            // Head (big circle - bigger than body for cuteness)
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [state.bodyColor.opacity(1.0), state.bodyColor.opacity(0.85)],
-                        center: .init(x: 0.4, y: 0.35),
-                        startRadius: 2,
-                        endRadius: 24 * scale
+                        colors: [state.bodyColor, state.bodyColor.opacity(0.88)],
+                        center: .init(x: 0.42, y: 0.35),
+                        startRadius: 0,
+                        endRadius: 26 * s
                     )
                 )
-                .frame(width: 42 * scale, height: 42 * scale)
-                .offset(x: 10 * scale, y: -16 * scale + bobOffset)
+                .frame(width: 48 * s, height: 48 * s)
+                .offset(x: 4 * s, y: -12 * s + bobOffset)
+
+            // Head shine
+            Ellipse()
+                .fill(.white.opacity(0.2))
+                .frame(width: 18 * s, height: 12 * s)
+                .rotationEffect(.degrees(-20))
+                .offset(x: -6 * s, y: -24 * s + bobOffset)
+                .blur(radius: 2 * s)
 
             // Cheek blush
             if state == .begeistert || state == .zufrieden {
                 Circle()
                     .fill(Color.pink.opacity(blushOpacity))
-                    .frame(width: 10 * scale, height: 8 * scale)
-                    .offset(x: 22 * scale, y: -8 * scale + bobOffset)
-                    .blur(radius: 2 * scale)
+                    .frame(width: 12 * s, height: 8 * s)
+                    .offset(x: 20 * s, y: -4 * s + bobOffset)
+                    .blur(radius: 3 * s)
             }
 
-            // Bill
-            DuckBill(state: state, scale: scale)
-                .offset(x: 32 * scale, y: -12 * scale + bobOffset)
+            // Bill (orange beak)
+            bill
+                .offset(x: 28 * s, y: -8 * s + bobOffset)
 
-            // Eye
-            DuckEye(state: state, scale: scale, blinkOpacity: blinkOpacity)
-                .offset(x: 18 * scale, y: -24 * scale + bobOffset)
+            // Eyes (big kawaii style)
+            eyeGroup
+                .offset(x: 8 * s, y: -18 * s + bobOffset)
 
-            // Hair tuft
-            DuckHairTuft(scale: scale, state: state)
-                .offset(x: 4 * scale, y: -38 * scale + bobOffset)
+            // Crown / hair tuft
+            hairTuft
+                .offset(x: 0, y: -38 * s + bobOffset)
 
             // State decorations
-            stateDecoration
+            decorations
         }
-        .frame(width: 90 * scale, height: 110 * scale)
     }
 
+    // MARK: - Bill
+
+    private var bill: some View {
+        ZStack {
+            // Upper beak
+            RoundedRectangle(cornerRadius: 6 * s)
+                .fill(state.billColor)
+                .frame(width: 20 * s, height: 10 * s)
+                .offset(y: -2 * s)
+
+            // Lower beak (smaller)
+            RoundedRectangle(cornerRadius: 4 * s)
+                .fill(state.billColor.opacity(0.8))
+                .frame(width: 17 * s, height: 7 * s)
+                .offset(y: 5 * s)
+
+            // Smile line
+            if state == .begeistert || state == .zufrieden {
+                Path { p in
+                    p.move(to: CGPoint(x: 2 * s, y: 4 * s))
+                    p.addQuadCurve(
+                        to: CGPoint(x: 16 * s, y: 4 * s),
+                        control: CGPoint(x: 9 * s, y: (state == .begeistert ? 11 : 8) * s)
+                    )
+                }
+                .stroke(.white.opacity(0.5), lineWidth: 1.5 * s)
+                .frame(width: 20 * s, height: 14 * s)
+                .offset(y: 1 * s)
+            }
+        }
+    }
+
+    // MARK: - Eyes
+
+    private var eyeGroup: some View {
+        HStack(spacing: 6 * s) {
+            singleEye(isLeft: true)
+            singleEye(isLeft: false)
+        }
+    }
+
+    private func singleEye(isLeft: Bool) -> some View {
+        ZStack {
+            // Eye white
+            Ellipse()
+                .fill(.white)
+                .frame(width: eyeSize, height: eyeSize * blinkScale)
+                .shadow(color: .black.opacity(0.05), radius: 1, y: 1)
+
+            if blinkScale > 0.3 {
+                // Pupil
+                Circle()
+                    .fill(.black)
+                    .frame(width: pupilSize, height: pupilSize)
+                    .offset(x: (isLeft ? 0.5 : 1) * s, y: 0.5 * s)
+
+                // Eye glint
+                Circle()
+                    .fill(.white)
+                    .frame(width: glintSize, height: glintSize)
+                    .offset(x: (isLeft ? 1.5 : 2) * s, y: -1.5 * s)
+
+                // Star eyes for excited state
+                if state == .begeistert {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 5 * s))
+                        .foregroundStyle(AppTheme.sunshine)
+                        .offset(x: 0.5 * s, y: 0.5 * s)
+                }
+            }
+
+            // Squint for cold
+            if state == .frierend {
+                Capsule()
+                    .fill(.black.opacity(0.6))
+                    .frame(width: eyeSize * 0.8, height: 2 * s)
+                    .offset(y: 2 * s)
+            }
+
+            // Worried eyebrow
+            if state == .zoegernd || state == .warnend {
+                Capsule()
+                    .fill(.black.opacity(0.5))
+                    .frame(width: eyeSize * 0.7, height: 1.5 * s)
+                    .rotationEffect(.degrees(isLeft ? 10 : -10))
+                    .offset(y: -(eyeSize * 0.6))
+            }
+        }
+    }
+
+    private var eyeSize: CGFloat {
+        switch state {
+        case .begeistert: return 14 * s
+        case .frierend: return 10 * s
+        default: return 12 * s
+        }
+    }
+
+    private var pupilSize: CGFloat {
+        switch state {
+        case .begeistert: return 6 * s
+        case .warnend: return 4 * s
+        default: return 5 * s
+        }
+    }
+
+    private var glintSize: CGFloat { 2.5 * s }
+
+    // MARK: - Wing
+
+    private var wing: some View {
+        Ellipse()
+            .fill(
+                LinearGradient(
+                    colors: [state.bodyColor.opacity(0.5), state.bodyColor.opacity(0.3)],
+                    startPoint: .top, endPoint: .bottom
+                )
+            )
+            .frame(width: 22 * s, height: 14 * s)
+            .rotationEffect(.degrees(15))
+    }
+
+    // MARK: - Tail
+
+    private var tail: some View {
+        ZStack {
+            Capsule()
+                .fill(state.bodyColor.opacity(0.5))
+                .frame(width: 10 * s, height: 4 * s)
+                .rotationEffect(.degrees(-20))
+            Capsule()
+                .fill(state.bodyColor.opacity(0.4))
+                .frame(width: 8 * s, height: 3 * s)
+                .rotationEffect(.degrees(-35))
+                .offset(y: -3 * s)
+        }
+    }
+
+    // MARK: - Hair tuft
+
+    private var hairTuft: some View {
+        ZStack {
+            ForEach(0..<3, id: \.self) { i in
+                Capsule()
+                    .fill(state.bodyColor.opacity(0.65))
+                    .frame(width: 2.5 * s, height: (8 + CGFloat(i) * 2) * s)
+                    .rotationEffect(.degrees(Double(i - 1) * 20))
+                    .offset(x: CGFloat(i - 1) * 3 * s, y: CGFloat(2 - i) * s)
+            }
+        }
+    }
+
+    // MARK: - Decorations
+
     @ViewBuilder
-    private var stateDecoration: some View {
+    private var decorations: some View {
         switch state {
         case .begeistert:
             Group {
-                SparkleView(size: 14 * scale)
-                    .offset(x: 38 * scale, y: -42 * scale + bobOffset)
-                    .rotationEffect(.degrees(sparkleRotation))
-                SparkleView(size: 10 * scale)
-                    .offset(x: -32 * scale, y: -48 * scale + bobOffset)
-                    .rotationEffect(.degrees(-sparkleRotation))
-                SparkleView(size: 8 * scale)
-                    .offset(x: 42 * scale, y: 0 + bobOffset)
-                    .rotationEffect(.degrees(sparkleRotation * 0.5))
+                sparkle(x: 36, y: -38, size: 12)
+                sparkle(x: -30, y: -44, size: 9)
+                sparkle(x: 38, y: 5, size: 7)
             }
         case .frierend:
             Group {
-                Text("❄️").font(.system(size: 12 * scale))
-                    .offset(x: -34 * scale, y: -30 * scale + bobOffset)
-                    .opacity(0.8)
-                Text("❄️").font(.system(size: 9 * scale))
-                    .offset(x: 38 * scale, y: -44 * scale + bobOffset)
-                    .opacity(0.6)
-                Text("❄️").font(.system(size: 7 * scale))
-                    .offset(x: -20 * scale, y: -50 * scale + bobOffset)
-                    .opacity(0.5)
+                snowflake(x: -32, y: -28, size: 11)
+                snowflake(x: 36, y: -42, size: 8)
+                snowflake(x: -18, y: -48, size: 6)
             }
         case .warnend:
-            Text("⚠️").font(.system(size: 14 * scale))
-                .offset(x: 36 * scale, y: -48 * scale + bobOffset)
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12 * s))
+                .foregroundStyle(AppTheme.coral)
+                .offset(x: 34 * s, y: -44 * s + bobOffset)
         case .zoegernd:
-            Text("💧").font(.system(size: 10 * scale))
-                .offset(x: 36 * scale, y: -38 * scale + bobOffset)
-                .opacity(0.7)
+            Text("?")
+                .font(.system(size: 14 * s, weight: .heavy, design: .rounded))
+                .foregroundStyle(AppTheme.sunshine.opacity(0.6))
+                .offset(x: 34 * s, y: -42 * s + bobOffset)
         default:
             EmptyView()
         }
     }
 
+    private func sparkle(x: CGFloat, y: CGFloat, size: CGFloat) -> some View {
+        Image(systemName: "sparkle")
+            .font(.system(size: size * s))
+            .foregroundStyle(AppTheme.sunshine)
+            .opacity(sparkleOpacity)
+            .offset(x: x * s, y: y * s + bobOffset)
+    }
+
+    private func snowflake(x: CGFloat, y: CGFloat, size: CGFloat) -> some View {
+        Image(systemName: "snowflake")
+            .font(.system(size: size * s))
+            .foregroundStyle(AppTheme.skyBlue.opacity(0.6))
+            .offset(x: x * s, y: y * s + bobOffset)
+    }
+
     // MARK: - Animations
 
     private func startAnimations() {
-        // Bob
-        withAnimation(
-            .easeInOut(duration: state == .frierend ? 0.8 : 2.0)
-            .repeatForever(autoreverses: true)
-        ) {
-            bobOffset = state == .frierend ? -5 * scale : -3 * scale
+        let bobAmount: CGFloat = state == .frierend ? -4 : -2.5
+        let bobDuration: Double = state == .frierend ? 0.6 : 2.2
+
+        withAnimation(.easeInOut(duration: bobDuration).repeatForever(autoreverses: true)) {
+            bobOffset = bobAmount * s
         }
 
-        // Wing flap
-        withAnimation(
-            .easeInOut(duration: state == .begeistert ? 0.4 : 2.5)
-            .repeatForever(autoreverses: true)
-        ) {
-            wingAngle = state == .begeistert ? -20 : -3
+        let wingTarget: Double = state == .begeistert ? -22 : -4
+        let wingSpeed: Double = state == .begeistert ? 0.35 : 2.5
+        withAnimation(.easeInOut(duration: wingSpeed).repeatForever(autoreverses: true)) {
+            wingAngle = wingTarget
         }
 
-        // Blush
         if state == .begeistert || state == .zufrieden {
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                blushOpacity = state == .begeistert ? 0.45 : 0.25
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                blushOpacity = state == .begeistert ? 0.4 : 0.2
             }
+        } else {
+            blushOpacity = 0
         }
 
-        // Sparkle rotation
         if state == .begeistert {
-            withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
-                sparkleRotation = 360
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                sparkleOpacity = 1
             }
+        } else {
+            sparkleOpacity = 0
         }
 
-        // Blink
         scheduleBlink()
     }
 
     private func scheduleBlink() {
-        let delay = Double.random(in: 2.5...5)
+        let delay = Double.random(in: 2...5)
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            withAnimation(.easeInOut(duration: 0.06)) { blinkOpacity = 0 }
+            withAnimation(.easeInOut(duration: 0.06)) { blinkScale = 0.05 }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.easeInOut(duration: 0.06)) { blinkOpacity = 1 }
+                withAnimation(.easeInOut(duration: 0.06)) { blinkScale = 1 }
                 scheduleBlink()
             }
         }
     }
 }
 
-// MARK: - Sparkle
-
-private struct SparkleView: View {
-    let size: CGFloat
-    @State private var opacity: Double = 0.3
-
-    var body: some View {
-        Image(systemName: "sparkle")
-            .font(.system(size: size))
-            .foregroundStyle(AppTheme.sunshine)
-            .opacity(opacity)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                    opacity = 1.0
-                }
-            }
-    }
-}
-
-// MARK: - Hair Tuft
-
-private struct DuckHairTuft: View {
-    let scale: CGFloat
-    let state: DuckState
-
-    var body: some View {
-        ZStack {
-            ForEach(0..<3, id: \.self) { i in
-                Capsule()
-                    .fill(state.bodyColor.opacity(0.7))
-                    .frame(width: 3 * scale, height: 10 * scale)
-                    .rotationEffect(.degrees(Double(i - 1) * 18))
-                    .offset(x: CGFloat(i - 1) * 3 * scale)
-            }
-        }
-    }
-}
-
-// MARK: - Tail
-
-private struct DuckTail: View {
-    let scale: CGFloat
-    let state: DuckState
-
-    var body: some View {
-        ZStack {
-            ForEach(0..<3, id: \.self) { i in
-                Capsule()
-                    .fill(state.bodyColor.opacity(0.6 - Double(i) * 0.1))
-                    .frame(width: 12 * scale, height: 4 * scale)
-                    .rotationEffect(.degrees(Double(i - 1) * 15 - 10))
-                    .offset(y: CGFloat(i) * 3 * scale)
-            }
-        }
-    }
-}
-
-// MARK: - Bill
-
-private struct DuckBill: View {
-    let state: DuckState
-    let scale: CGFloat
-
-    var body: some View {
-        ZStack {
-            Capsule()
-                .fill(state.billColor)
-                .frame(width: 18 * scale, height: 9 * scale)
-                .offset(y: -2 * scale)
-
-            Capsule()
-                .fill(state.billColor.opacity(0.75))
-                .frame(width: 16 * scale, height: 7 * scale)
-                .offset(y: 4 * scale)
-
-            mouthShape
-        }
-    }
-
-    @ViewBuilder
-    private var mouthShape: some View {
-        switch state {
-        case .begeistert:
-            Path { p in
-                p.move(to: CGPoint(x: 2 * scale, y: 4 * scale))
-                p.addQuadCurve(
-                    to: CGPoint(x: 14 * scale, y: 4 * scale),
-                    control: CGPoint(x: 8 * scale, y: 10 * scale)
-                )
-            }
-            .stroke(Color.white.opacity(0.6), lineWidth: 1.5 * scale)
-            .frame(width: 18 * scale, height: 12 * scale)
-            .offset(y: 1 * scale)
-        case .zufrieden:
-            Path { p in
-                p.move(to: CGPoint(x: 3 * scale, y: 4 * scale))
-                p.addQuadCurve(
-                    to: CGPoint(x: 13 * scale, y: 4 * scale),
-                    control: CGPoint(x: 8 * scale, y: 7 * scale)
-                )
-            }
-            .stroke(Color.white.opacity(0.5), lineWidth: 1.2 * scale)
-            .frame(width: 18 * scale, height: 10 * scale)
-            .offset(y: 1 * scale)
-        case .frierend, .warnend:
-            Path { p in
-                p.move(to: CGPoint(x: 3 * scale, y: 6 * scale))
-                p.addQuadCurve(
-                    to: CGPoint(x: 13 * scale, y: 6 * scale),
-                    control: CGPoint(x: 8 * scale, y: 2 * scale)
-                )
-            }
-            .stroke(Color.white.opacity(0.5), lineWidth: 1.2 * scale)
-            .frame(width: 18 * scale, height: 10 * scale)
-        default:
-            EmptyView()
-        }
-    }
-}
-
-// MARK: - Eye
-
-private struct DuckEye: View {
-    let state: DuckState
-    let scale: CGFloat
-    let blinkOpacity: Double
-
-    var body: some View {
-        ZStack {
-            Ellipse()
-                .fill(.white)
-                .frame(width: eyeWidth, height: eyeHeight * blinkOpacity + 0.5)
-                .opacity(blinkOpacity < 0.2 ? 0 : 1)
-
-            Circle()
-                .fill(.black)
-                .frame(width: 5 * scale, height: 5 * scale)
-                .offset(x: 1 * scale, y: -1 * scale)
-                .opacity(blinkOpacity < 0.2 ? 0 : 1)
-
-            Circle()
-                .fill(.white.opacity(0.9))
-                .frame(width: 2.5 * scale, height: 2.5 * scale)
-                .offset(x: 2.5 * scale, y: -2.5 * scale)
-                .opacity(blinkOpacity < 0.2 ? 0 : 1)
-
-            if state == .zoegernd {
-                Capsule()
-                    .fill(.black.opacity(0.7))
-                    .frame(width: 10 * scale, height: 2 * scale)
-                    .rotationEffect(.degrees(-15))
-                    .offset(x: 1 * scale, y: -10 * scale)
-                    .opacity(blinkOpacity < 0.2 ? 0 : 1)
-            }
-
-            if state == .frierend {
-                Capsule()
-                    .fill(.black.opacity(0.6))
-                    .frame(width: 10 * scale, height: 2.5 * scale)
-                    .offset(y: 3 * scale)
-            }
-
-            if state == .begeistert {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 7 * scale))
-                    .foregroundStyle(.yellow)
-                    .offset(x: 1 * scale, y: -1 * scale)
-                    .opacity(blinkOpacity < 0.2 ? 0 : 1)
-            }
-        }
-    }
-
-    private var eyeWidth: CGFloat {
-        switch state {
-        case .begeistert: return 13 * scale
-        case .frierend, .warnend: return 10 * scale
-        default: return 11 * scale
-        }
-    }
-
-    private var eyeHeight: CGFloat {
-        switch state {
-        case .begeistert: return 13 * scale
-        case .frierend: return 6 * scale
-        default: return 10 * scale
-        }
-    }
-}
-
-// MARK: - Wing
-
-private struct DuckWing: View {
-    let scale: CGFloat
-    let state: DuckState
-
-    var body: some View {
-        Ellipse()
-            .fill(
-                LinearGradient(
-                    colors: [state.bodyColor.opacity(0.55), state.bodyColor.opacity(0.35)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .frame(width: 26 * scale, height: 16 * scale)
-            .rotationEffect(.degrees(20))
-    }
-}
-
-// MARK: - Pin version for Map
+// MARK: - Map Pin
 
 struct DuckPinView: View {
     let state: DuckState
@@ -421,9 +383,9 @@ struct DuckPinView: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(state.bodyColor.opacity(0.25))
+                .fill(state.bodyColor.opacity(0.2))
                 .frame(width: 44, height: 44)
-                .scaleEffect(appear ? 1.0 : 0.6)
+                .scaleEffect(appear ? 1.0 : 0.5)
 
             Circle()
                 .fill(state.bodyColor)
@@ -439,7 +401,7 @@ struct DuckPinView: View {
     }
 }
 
-// MARK: - Small inline badge
+// MARK: - Small badge
 
 struct DuckBadge: View {
     let state: DuckState
@@ -454,10 +416,10 @@ struct DuckBadge: View {
 
 #Preview("Ducky States") {
     ScrollView(.horizontal) {
-        HStack(spacing: 24) {
+        HStack(spacing: 20) {
             ForEach(DuckState.allCases, id: \.rawValue) { state in
-                VStack(spacing: 8) {
-                    DuckView(state: state, size: 100)
+                VStack(spacing: 10) {
+                    DuckView(state: state, size: 110)
                     Text(state.title)
                         .font(AppTheme.cardTitle)
                     Text(state.line)
@@ -467,7 +429,7 @@ struct DuckBadge: View {
                         .frame(width: 120)
                 }
                 .padding()
-                .background(state.backgroundGradient, in: RoundedRectangle(cornerRadius: 16))
+                .background(state.backgroundGradient, in: RoundedRectangle(cornerRadius: 20))
             }
         }
         .padding()

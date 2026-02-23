@@ -67,6 +67,14 @@ enum AppTheme {
     static let badgeRadius: CGFloat = 12
     static let buttonRadius: CGFloat = 16
 
+    // MARK: - Seasonal Colors
+
+    static let winterBlue = Color(red: 0.72, green: 0.84, blue: 0.96)
+    static let springGreen = Color(red: 0.55, green: 0.82, blue: 0.68)
+    static let autumnOrange = Color(red: 0.90, green: 0.68, blue: 0.42)
+    static let autumnRed = Color(red: 0.82, green: 0.42, blue: 0.28)
+    static let autumnGold = Color(red: 0.88, green: 0.72, blue: 0.32)
+
     // MARK: - Animations
 
     static let springAnimation = Animation.spring(response: 0.5, dampingFraction: 0.75, blendDuration: 0)

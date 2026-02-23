@@ -26,6 +26,89 @@ struct HomeView: View {
         return lakes
     }
 
+    // MARK: - Contextual hero data
+
+    private var warmLakeCount: Int {
+        dataService.lakes.filter { ($0.waterTemperature ?? 0) >= 20 }.count
+    }
+
+    private var lakesWithTemperature: Int {
+        dataService.lakes.filter { $0.waterTemperature != nil }.count
+    }
+
+    private var season: Season { .current }
+
+    private var heroState: DuckState {
+        if dataService.isLoading { return .zufrieden }
+        // Off-season: use seasonal duck state
+        if Season.isOffSeason { return season.duckState }
+        // In-season: data-driven
+        if warmLakeCount > 10 { return .begeistert }
+        if warmLakeCount > 0 { return .zufrieden }
+        if lakesWithTemperature > 0 {
+            let anyWarm = dataService.lakes.contains { ($0.waterTemperature ?? 0) >= 14 }
+            return anyWarm ? .zoegernd : .frierend
+        }
+        return .zufrieden
+    }
+
+    private var heroGreeting: String {
+        // Off-season: use seasonal title
+        if Season.isOffSeason { return season.heroTitle }
+        // In-season: time-of-day greeting
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour < 6 { return "Gute Nacht!" }
+        if hour < 12 { return "Guten Morgen!" }
+        if hour < 18 { return "Hallo!" }
+        return "Guten Abend!"
+    }
+
+    private var heroMessage: String {
+        if dataService.isLoading {
+            return "Ducky checkt die Wassertemperaturen..."
+        }
+
+        // Off-season: seasonal message
+        if Season.isOffSeason {
+            return season.heroMessage
+        }
+
+        let total = dataService.lakes.count
+
+        if total == 0 {
+            return "Entdecke Österreichs schönste Badegewässer!"
+        }
+
+        // In-season: no temperature data yet
+        if lakesWithTemperature == 0 {
+            return "\(total) Gewässer geladen. Temperaturdaten werden aktualisiert."
+        }
+
+        // In-season: data-driven messages
+        if warmLakeCount > 10 {
+            if let warmest = warmestLakes.first, let temp = warmest.waterTemperature {
+                return "Super Badewetter! \(warmLakeCount) Seen über 20°C. \(warmest.name) führt mit \(String(format: "%.0f", temp))°C!"
+            }
+            return "Super Badewetter! \(warmLakeCount) Seen haben über 20°C!"
+        }
+
+        if warmLakeCount > 0 {
+            return "\(warmLakeCount) von \(lakesWithTemperature) Seen sind warm genug zum Baden."
+        }
+
+        let mildCount = dataService.lakes.filter { ($0.waterTemperature ?? 0) >= 14 }.count
+        if mildCount > 0 {
+            return "Die Seen sind noch frisch — \(mildCount) haben über 14°C. Nur für Mutige!"
+        }
+
+        return "Brr! Die Seen sind noch kalt. Ducky empfiehlt: Warten."
+    }
+
+    /// Year of the last measurement data, e.g. "2025"
+    private var lastMeasurementYear: String {
+        warmestLakes.first?.measurementYear ?? ""
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -34,41 +117,8 @@ struct HomeView: View {
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
-                        // Hero
-                        heroDuckSection
-
-                        // Content
-                        VStack(spacing: 28) {
-                            // Search bar
-                            searchBar
-
-                            // Quick stats
-                            statsRow
-
-                            // Nearby
-                            if locationService.isAuthorized {
-                                lakeSection(
-                                    title: "In deiner Nähe",
-                                    icon: "location.fill",
-                                    iconColor: AppTheme.oceanBlue,
-                                    lakes: nearbyLakes,
-                                    showDistance: true
-                                )
-                            }
-
-                            // Warmest
-                            lakeSection(
-                                title: "Am wärmsten",
-                                icon: "flame.fill",
-                                iconColor: AppTheme.coral,
-                                lakes: warmestLakes,
-                                showDistance: false
-                            )
-
-                            // All lakes section
-                            allLakesSection
-                        }
-                        .padding(.bottom, 40)
+                        heroSection
+                        contentSections
                     }
                 }
                 .refreshable {
@@ -95,75 +145,170 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Hero Duck Section
+    // MARK: - Hero Section
 
-    private var heroDuckSection: some View {
-        ZStack {
-            // Gradient background
-            AppTheme.heroGradient
-                .frame(height: 280)
-                .clipShape(
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                )
+    private var heroSection: some View {
+        ZStack(alignment: .bottom) {
+            // Background gradient card — seasonal
+            ZStack {
+                season.heroGradient
+
+                // Seasonal particle effects (snow, leaves, blossoms, or bubbles)
+                SeasonalOverlay(season: season)
+            }
+            .frame(height: 310)
+            .clipShape(
+                RoundedRectangle(cornerRadius: 32, style: .continuous)
+            )
+            .padding(.horizontal, 16)
+            .shadow(color: season.heroGradientColors.last?.opacity(0.25) ?? AppTheme.oceanBlue.opacity(0.2), radius: 20, y: 10)
+
+            // Wave at the bottom of hero
+            WaterWaveView(baseColor: season.waveColor, height: 35, speed: 0.8)
+                .frame(height: 35)
+                .offset(y: 15)
                 .padding(.horizontal, 16)
-                .shadow(color: AppTheme.oceanBlue.opacity(0.25), radius: 20, y: 10)
 
-            VStack(spacing: 12) {
+            // Content overlay
+            VStack(spacing: 10) {
+                // Duck
                 ZStack {
-                    // Animated circles
                     Circle()
                         .fill(.white.opacity(0.08))
-                        .frame(width: 140, height: 140)
-                        .scaleEffect(heroAppear ? 1.1 : 0.9)
-                        .blur(radius: 10)
+                        .frame(width: 130, height: 130)
+                        .scaleEffect(heroAppear ? 1.05 : 0.95)
 
-                    DuckView(state: heroState, size: 120)
+                    DuckView(state: heroState, size: 110)
                 }
-                .frame(height: 140)
+                .frame(height: 130)
 
-                VStack(spacing: 6) {
-                    Text(greeting)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-
-                    Text(heroState.line)
-                        .font(.system(size: 15, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.85))
+                // Season icon + greeting
+                HStack(spacing: 6) {
+                    if Season.isOffSeason {
+                        Image(systemName: season.heroIcon)
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    Text(heroGreeting)
+                        .font(.system(size: Season.isOffSeason ? 20 : 14, weight: Season.isOffSeason ? .heavy : .semibold, design: .rounded))
                 }
+                .foregroundStyle(.white.opacity(Season.isOffSeason ? 1.0 : 0.75))
+
+                // Contextual message
+                Text(heroMessage)
+                    .font(.system(size: Season.isOffSeason ? 15 : 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(Season.isOffSeason ? 0.85 : 1.0))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .padding(.horizontal, 20)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if let error = dataService.error {
                     HStack(spacing: 4) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 11))
+                            .font(.system(size: 10))
                         Text(error)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
                     }
-                    .foregroundStyle(.white.opacity(0.7))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.white.opacity(0.15), in: Capsule())
+                    .foregroundStyle(.white.opacity(0.65))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.white.opacity(0.12), in: Capsule())
                 }
             }
-            .padding(.top, 16)
+            .padding(.bottom, 36)
         }
-        .padding(.bottom, 20)
+        .padding(.bottom, 12)
         .onAppear {
-            withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
                 heroAppear = true
             }
         }
     }
 
-    private var heroState: DuckState {
-        guard let warmest = warmestLakes.first else { return .zufrieden }
-        return warmest.duckState
+    // MARK: - Content
+
+    private var contentSections: some View {
+        VStack(spacing: 28) {
+            searchBar
+            statsRow
+
+            if locationService.isAuthorized {
+                lakeSection(
+                    title: "In deiner Nähe",
+                    icon: "location.fill",
+                    iconColor: AppTheme.oceanBlue,
+                    lakes: nearbyLakes,
+                    showDistance: true
+                )
+            }
+
+            if !warmestLakes.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    lakeSection(
+                        title: Season.isOffSeason ? "Letzte Messungen" : "Am wärmsten",
+                        icon: Season.isOffSeason ? "clock.arrow.circlepath" : "flame.fill",
+                        iconColor: Season.isOffSeason ? AppTheme.textSecondary : AppTheme.coral,
+                        lakes: warmestLakes,
+                        showDistance: false
+                    )
+
+                    // Off-season: show that this data is from last summer
+                    if Season.isOffSeason && !lastMeasurementYear.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 11))
+                            Text("Wassertemperaturen vom Sommer \(lastMeasurementYear)")
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                        }
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 6)
+                    }
+                }
+            }
+
+            // Wave divider before all lakes
+            WaveDivider(color: AppTheme.teal, height: 24)
+                .padding(.horizontal, 16)
+
+            allLakesSection
+
+            // Data source attribution
+            dataAttributionFooter
+        }
+        .padding(.bottom, 40)
     }
 
-    private var greeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        if hour < 12 { return "Guten Morgen! Ducky hier." }
-        if hour < 18 { return "Hallo! Ducky meldet sich." }
-        return "Guten Abend! Ducky wünscht schöne Badezeit."
+    // MARK: - Data Attribution
+
+    private var dataAttributionFooter: some View {
+        VStack(spacing: 6) {
+            Divider()
+                .padding(.horizontal, 20)
+
+            VStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    Image(systemName: "building.columns")
+                        .font(.system(size: 10))
+                    Text("Wasserqualität & Temperatur: AGES Badegewässerdatenbank")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                }
+
+                Text("Wassertemperaturen werden von Juni bis August gemessen.")
+                    .font(.system(size: 11, weight: .regular, design: .rounded))
+
+                HStack(spacing: 4) {
+                    Image(systemName: "cloud.sun")
+                        .font(.system(size: 10))
+                    Text("Wetter: Open-Meteo (aktuell)")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                }
+            }
+            .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+        }
     }
 
     // MARK: - Search Bar
@@ -179,7 +324,7 @@ struct HomeView: View {
 
             if !searchText.isEmpty {
                 Button {
-                    searchText = ""
+                    withAnimation(AppTheme.quickSpring) { searchText = "" }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16))
@@ -204,12 +349,14 @@ struct HomeView: View {
                     label: "Gewässer",
                     color: AppTheme.oceanBlue
                 )
-                statChip(
-                    icon: "thermometer.sun.fill",
-                    value: warmestLakes.first?.waterTemperature.map { String(format: "%.0f°C", $0) } ?? "–",
-                    label: "Wärmstes",
-                    color: AppTheme.coral
-                )
+                if let warmest = warmestLakes.first, let temp = warmest.waterTemperature {
+                    statChip(
+                        icon: Season.isOffSeason ? "clock.arrow.circlepath" : "thermometer.sun.fill",
+                        value: String(format: "%.0f°C", temp),
+                        label: Season.isOffSeason ? "Sommer \(lastMeasurementYear)" : "Wärmstes",
+                        color: Season.isOffSeason ? AppTheme.textSecondary : AppTheme.coral
+                    )
+                }
                 statChip(
                     icon: "checkmark.seal.fill",
                     value: "\(dataService.lakes.filter { $0.qualityRating?.uppercased() == "A" }.count)",
@@ -320,7 +467,7 @@ struct HomeView: View {
             }
             .padding(.horizontal, 20)
 
-            // State filter chips
+            // Filter chips
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     filterChip(label: "Alle", isSelected: selectedState == nil) {
@@ -338,9 +485,7 @@ struct HomeView: View {
             // Lake list
             LazyVStack(spacing: 2) {
                 ForEach(filteredLakes.prefix(showAllLakes ? 999 : 20)) { lake in
-                    Button {
-                        selectedLake = lake
-                    } label: {
+                    Button { selectedLake = lake } label: {
                         LakeListRow(
                             lake: lake,
                             distanceKm: locationService.userLocation.map { lake.distance(from: $0) }

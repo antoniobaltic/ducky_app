@@ -57,12 +57,19 @@ struct LakeDetailView: View {
 
     private var heroSection: some View {
         ZStack(alignment: .bottom) {
-            lake.duckState.backgroundGradient
-                .frame(height: 340)
-                .overlay(
-                    BubbleBackground(color: .white)
-                        .opacity(0.5)
-                )
+            ZStack {
+                lake.duckState.backgroundGradient
+                    .frame(height: 340)
+
+                // Floating bubbles
+                FloatingBubblesView(count: 5, color: .white.opacity(0.25))
+                    .frame(height: 340)
+            }
+
+            // Wave at bottom of hero
+            WaterWaveView(baseColor: AppTheme.pageBackground, height: 30, speed: 0.6)
+                .frame(height: 30)
+                .offset(y: 14)
 
             VStack(spacing: 0) {
                 Spacer()
@@ -108,8 +115,13 @@ struct LakeDetailView: View {
                 }
 
                 // Temperature
-                TemperatureBadge(temperature: lake.waterTemperature, size: .hero)
-                    .padding(.top, 12)
+                TemperatureBadge(
+                    temperature: lake.waterTemperature,
+                    size: .hero,
+                    isOutdated: lake.isTemperatureOutdated,
+                    measurementDate: lake.measurementDate
+                )
+                .padding(.top, 12)
 
                 // Duck quote
                 Text("\u{201E}\(lake.duckState.line)\u{201C}")
@@ -128,6 +140,11 @@ struct LakeDetailView: View {
 
     private var contentSection: some View {
         VStack(spacing: 16) {
+            // Off-season info banner
+            if Season.isOffSeason {
+                seasonInfoBanner
+            }
+
             // Weather (always try to show)
             if let weather {
                 weatherCard(weather)
@@ -150,6 +167,32 @@ struct LakeDetailView: View {
         .padding(.bottom, 40)
     }
 
+    // MARK: - Season Info Banner
+
+    private var seasonInfoBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: Season.current.heroIcon)
+                .font(.system(size: 18))
+                .foregroundStyle(Season.current == .winter ? AppTheme.winterBlue : AppTheme.autumnOrange)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Außerhalb der Badesaison")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text("Wassertemperaturen werden von Juni bis August gemessen.")
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+
+            Spacer()
+        }
+        .appCard()
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
+                .stroke(AppTheme.textSecondary.opacity(0.15), lineWidth: 1)
+        )
+    }
+
     // MARK: - Weather Card
 
     private func weatherCard(_ weather: LakeWeather) -> some View {
@@ -162,6 +205,12 @@ struct LakeDetailView: View {
                     Text("Wetter vor Ort")
                         .font(AppTheme.cardTitle)
                         .foregroundStyle(AppTheme.textPrimary)
+                    Text("Aktuell")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.freshGreen)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(AppTheme.freshGreen.opacity(0.12), in: Capsule())
                 }
                 Spacer()
                 Image(systemName: weather.conditionSymbol)
@@ -246,6 +295,15 @@ struct LakeDetailView: View {
                     Spacer()
                 }
             }
+
+            // AGES attribution
+            HStack(spacing: 4) {
+                Image(systemName: "building.columns")
+                    .font(.system(size: 10))
+                Text("Daten: AGES Badegewässerdatenbank")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+            }
+            .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
         }
         .appCard()
     }
@@ -356,6 +414,13 @@ struct LakeDetailView: View {
     private var verdictSentence: String {
         if lake.isClosed {
             return "Dieses Gewässer ist aktuell gesperrt."
+        }
+        // Outdated data: reflect staleness
+        if lake.isTemperatureOutdated {
+            if let temp = lake.waterTemperature, let date = lake.measurementDate {
+                return "Letzte Messung: \(String(format: "%.1f°C", temp)) am \(date). Neue Daten ab Juni."
+            }
+            return "Keine aktuellen Messdaten. Neue Daten ab Juni."
         }
         guard let temp = lake.waterTemperature else {
             return "Keine aktuellen Temperaturdaten verfügbar."

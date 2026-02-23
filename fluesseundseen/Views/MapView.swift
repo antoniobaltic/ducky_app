@@ -66,10 +66,21 @@ struct MapView: View {
 
     private func lakeBottomSheet(_ lake: BathingWater) -> some View {
         VStack(spacing: 0) {
+            // Mini wave accent at top of sheet
+            WaveDivider(color: lake.qualityColor, height: 14)
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: 24,
+                        bottomLeadingRadius: 0,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 24
+                    )
+                )
+
             Capsule()
                 .fill(AppTheme.divider)
                 .frame(width: 36, height: 5)
-                .padding(.top, 10)
+                .padding(.top, 6)
 
             HStack(spacing: 14) {
                 DuckBadge(state: lake.duckState, size: 56)
@@ -94,7 +105,7 @@ struct MapView: View {
                     }
 
                     HStack(spacing: 8) {
-                        TemperatureBadge(temperature: lake.waterTemperature, size: .small)
+                        TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
                         QualityBadge(qualityLabel: lake.qualityLabel, qualityColor: lake.qualityColor)
                     }
                 }

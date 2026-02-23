@@ -53,7 +53,7 @@ struct LakeCard: View {
 
                 // Bottom info
                 HStack(spacing: 8) {
-                    TemperatureBadge(temperature: lake.waterTemperature, size: .small)
+                    TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
 
                     Spacer()
 
@@ -144,7 +144,7 @@ struct LakeListRow: View {
 
             Spacer()
 
-            TemperatureBadge(temperature: lake.waterTemperature, size: .small)
+            TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 16)

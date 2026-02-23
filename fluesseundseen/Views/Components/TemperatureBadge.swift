@@ -3,6 +3,8 @@ import SwiftUI
 struct TemperatureBadge: View {
     let temperature: Double?
     var size: BadgeSize = .medium
+    var isOutdated: Bool = false
+    var measurementDate: String? = nil
 
     enum BadgeSize {
         case small, medium, large, hero
@@ -65,23 +67,40 @@ struct TemperatureBadge: View {
     private var heroView: some View {
         Group {
             if let temp = temperature {
-                HStack(alignment: .top, spacing: 2) {
-                    Text(String(format: "%.1f", temp))
-                        .font(size.font)
-                        .foregroundStyle(color)
-                    Text("°C")
-                        .font(size.unitFont)
-                        .foregroundStyle(color.opacity(0.7))
-                        .padding(.top, 8)
+                VStack(spacing: 4) {
+                    HStack(alignment: .top, spacing: 2) {
+                        Text(String(format: "%.1f", temp))
+                            .font(size.font)
+                            .foregroundStyle(isOutdated ? color.opacity(0.5) : color)
+                        Text("°C")
+                            .font(size.unitFont)
+                            .foregroundStyle(color.opacity(isOutdated ? 0.35 : 0.7))
+                            .padding(.top, 8)
+                    }
+
+                    if isOutdated {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.system(size: 11))
+                            Text("Stand: \(measurementDate ?? "unbekannt")")
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                        }
+                        .foregroundStyle(AppTheme.textSecondary)
+                    }
                 }
             } else {
                 VStack(spacing: 4) {
                     Image(systemName: "thermometer.medium.slash")
                         .font(.system(size: 28, weight: .medium))
                         .foregroundStyle(.secondary)
-                    Text("Nicht verfügbar")
+                    Text(Season.isOffSeason ? "Keine aktuellen Daten" : "Nicht verfügbar")
                         .font(.system(size: 15, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
+                    if Season.isOffSeason {
+                        Text("Messungen: Juni – August")
+                            .font(.system(size: 12, weight: .regular, design: .rounded))
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             }
         }
@@ -99,9 +118,19 @@ struct TemperatureBadge: View {
         .padding(size.padding)
         .background(
             RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
-                .fill(color)
-                .shadow(color: color.opacity(0.35), radius: 4, y: 2)
+                .fill(color.opacity(isOutdated ? 0.45 : 1.0))
+                .shadow(color: color.opacity(isOutdated ? 0.15 : 0.35), radius: 4, y: 2)
         )
+        .overlay(alignment: .topTrailing) {
+            if isOutdated {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: size == .small ? 7 : 9, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(2.5)
+                    .background(Circle().fill(.black.opacity(0.35)))
+                    .offset(x: 4, y: -4)
+            }
+        }
     }
 
     private var unavailableBadge: some View {
@@ -122,7 +151,7 @@ struct TemperatureBadge: View {
     }
 }
 
-#Preview {
+#Preview("Standard") {
     VStack(spacing: 16) {
         HStack(spacing: 12) {
             TemperatureBadge(temperature: 24.5, size: .small)
@@ -136,6 +165,23 @@ struct TemperatureBadge: View {
         TemperatureBadge(temperature: 24.5, size: .large)
         TemperatureBadge(temperature: nil, size: .hero)
         TemperatureBadge(temperature: 22.3, size: .hero)
+    }
+    .padding()
+    .background(AppTheme.pageBackground)
+}
+
+#Preview("Outdated") {
+    VStack(spacing: 16) {
+        HStack(spacing: 12) {
+            TemperatureBadge(temperature: 24.5, size: .small, isOutdated: true)
+            TemperatureBadge(temperature: 18.2, size: .small, isOutdated: true)
+        }
+        HStack(spacing: 12) {
+            TemperatureBadge(temperature: 24.5, size: .medium, isOutdated: true)
+            TemperatureBadge(temperature: 15.0, size: .medium, isOutdated: true)
+        }
+        TemperatureBadge(temperature: 24.5, size: .large, isOutdated: true)
+        TemperatureBadge(temperature: 22.3, size: .hero, isOutdated: true, measurementDate: "29.08.2025")
     }
     .padding()
     .background(AppTheme.pageBackground)

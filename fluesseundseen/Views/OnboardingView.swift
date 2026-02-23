@@ -79,48 +79,55 @@ struct OnboardingView: View {
     // MARK: - Welcome Page
 
     private var welcomePage: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 24) {
+                Spacer()
 
-            // Duck mascot
-            ZStack {
-                Circle()
-                    .fill(AppTheme.sunshine.opacity(0.15))
-                    .frame(width: 200, height: 200)
-                    .scaleEffect(appear ? 1 : 0.5)
+                // Duck mascot
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.sunshine.opacity(0.15))
+                        .frame(width: 200, height: 200)
+                        .scaleEffect(appear ? 1 : 0.5)
 
-                Circle()
-                    .fill(AppTheme.skyBlue.opacity(0.1))
-                    .frame(width: 260, height: 260)
-                    .scaleEffect(appear ? 1 : 0.3)
+                    Circle()
+                        .fill(AppTheme.skyBlue.opacity(0.1))
+                        .frame(width: 260, height: 260)
+                        .scaleEffect(appear ? 1 : 0.3)
 
-                DuckView(state: .begeistert, size: 160)
-                    .scaleEffect(appear ? 1 : 0.6)
-                    .offset(y: appear ? 0 : 20)
-            }
-            .padding(.bottom, 8)
+                    DuckView(state: .begeistert, size: 160)
+                        .scaleEffect(appear ? 1 : 0.6)
+                        .offset(y: appear ? 0 : 20)
+                }
+                .padding(.bottom, 8)
 
-            VStack(spacing: 12) {
-                Text("Willkommen!")
-                    .font(.system(size: 34, weight: .heavy, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
+                VStack(spacing: 12) {
+                    Text("Willkommen!")
+                        .font(.system(size: 34, weight: .heavy, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
 
-                Text("Ich bin **Ducky**, dein Bade-Buddy!")
-                    .font(.system(size: 18, weight: .medium, design: .rounded))
+                    Text("Ich bin **Ducky**, dein Bade-Buddy!")
+                        .font(.system(size: 18, weight: .medium, design: .rounded))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                Text("Ich helfe dir, die besten\nBadegewässer in Österreich zu finden.")
+                    .font(.system(size: 16, weight: .regular, design: .rounded))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+
+                Spacer()
+                Spacer()
             }
+            .padding(.horizontal, 32)
 
-            Text("Ich helfe dir, die besten\nBadegewässer in Österreich zu finden.")
-                .font(.system(size: 16, weight: .regular, design: .rounded))
-                .foregroundStyle(AppTheme.textSecondary)
-                .multilineTextAlignment(.center)
-                .lineSpacing(4)
-
-            Spacer()
-            Spacer()
+            // Water wave at bottom
+            WaterWaveView(baseColor: AppTheme.oceanBlue, height: 40, speed: 0.7)
+                .frame(height: 40)
+                .opacity(0.4)
         }
-        .padding(.horizontal, 32)
     }
 
     // MARK: - Features Page
@@ -191,61 +198,71 @@ struct OnboardingView: View {
     // MARK: - Location Page
 
     private var locationPage: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        ZStack(alignment: .bottom) {
+            VStack(spacing: 24) {
+                Spacer()
 
-            ZStack {
-                Circle()
-                    .fill(AppTheme.skyBlue.opacity(0.1))
-                    .frame(width: 180, height: 180)
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.skyBlue.opacity(0.1))
+                        .frame(width: 180, height: 180)
 
-                Image(systemName: "location.circle.fill")
-                    .font(.system(size: 80))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(AppTheme.oceanBlue)
-            }
+                    FloatingBubblesView(count: 5, color: AppTheme.skyBlue.opacity(0.3))
+                        .frame(width: 200, height: 200)
 
-            VStack(spacing: 12) {
-                Text("Seen in deiner Nähe")
-                    .font(.system(size: 28, weight: .heavy, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
-
-                Text("Erlaube Ducky Zugriff auf deinen\nStandort, um nahe Gewässer zu finden.")
-                    .font(.system(size: 16, weight: .regular, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
-            }
-
-            if !locationService.isAuthorized {
-                Button {
-                    locationService.requestPermission()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "location.fill")
-                        Text("Standort freigeben")
-                    }
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppTheme.oceanBlue)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(AppTheme.oceanBlue.opacity(0.12), in: Capsule())
+                    Image(systemName: "location.circle.fill")
+                        .font(.system(size: 80))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(AppTheme.oceanBlue)
                 }
-            } else {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(AppTheme.freshGreen)
-                    Text("Standort freigegeben")
+
+                VStack(spacing: 12) {
+                    Text("Seen in deiner Nähe")
+                        .font(.system(size: 28, weight: .heavy, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+
+                    Text("Erlaube Ducky Zugriff auf deinen\nStandort, um nahe Gewässer zu finden.")
+                        .font(.system(size: 16, weight: .regular, design: .rounded))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                }
+
+                if !locationService.isAuthorized {
+                    Button {
+                        locationService.requestPermission()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "location.fill")
+                            Text("Standort freigeben")
+                        }
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.freshGreen)
+                        .foregroundStyle(AppTheme.oceanBlue)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(AppTheme.oceanBlue.opacity(0.12), in: Capsule())
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(AppTheme.freshGreen)
+                        Text("Standort freigegeben")
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AppTheme.freshGreen)
+                    }
+                    .padding(.top, 8)
                 }
-                .padding(.top, 8)
-            }
 
-            Spacer()
-            Spacer()
+                Spacer()
+                Spacer()
+            }
+            .padding(.horizontal, 32)
+
+            // Water wave at bottom
+            WaterWaveView(baseColor: AppTheme.teal, height: 35, speed: 0.6)
+                .frame(height: 35)
+                .opacity(0.35)
         }
-        .padding(.horizontal, 32)
     }
 }
 
