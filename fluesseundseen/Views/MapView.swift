@@ -63,22 +63,6 @@ struct MapView: View {
                 }
             }
             .navigationTitle("Karte")
-            .toolbar {
-                ToolbarItem(placement: .iOSTopBarTrailing) {
-                    Button {
-                        Task {
-                            await dataService.refresh()
-                            Haptics.success()
-                        }
-                    } label: {
-                        Image(systemName: dataService.isLoading ? "arrow.trianglehead.2.counterclockwise" : "arrow.trianglehead.2.counterclockwise.rotate.90")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .symbolEffect(.rotate, isActive: dataService.isLoading)
-                    }
-                    .disabled(dataService.isLoading)
-                }
-            }
             .task {
                 await dataService.loadData()
             }
@@ -142,20 +126,22 @@ struct MapView: View {
                     }
 
                     HStack(spacing: 8) {
-                        TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
-
-                        // Air temperature + weather
-                        if let weather = selectedWeather {
+                        if let weather = selectedWeather, let airTemp = weather.airTemperature {
                             HStack(spacing: 3) {
-                                Image(systemName: weather.conditionSymbol)
-                                    .font(.system(size: 11))
-                                    .symbolRenderingMode(.multicolor)
-                                if let airTemp = weather.airTemperature {
-                                    Text(String(format: "%.0f°C", airTemp))
-                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                }
+                                Image(systemName: "sun.max.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(AppTheme.coral)
+                                Text(String(format: "%.0f°C", airTemp))
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundStyle(AppTheme.textPrimary)
                             }
-                            .foregroundStyle(AppTheme.textSecondary)
+                        }
+
+                        HStack(spacing: 3) {
+                            Image(systemName: "drop.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(AppTheme.skyBlue)
+                            TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
                         }
 
                         QualityBadge(qualityLabel: lake.qualityLabel, qualityColor: lake.qualityColor)

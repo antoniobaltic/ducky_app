@@ -53,22 +53,28 @@ struct LakeCard: View {
                     DuckBadge(state: lake.duckState, size: 38)
                 }
 
-                // Temperature + Weather row
-                HStack(spacing: 8) {
-                    TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
-
-                    // Air temperature + weather
-                    if let weather {
+                // Temperature row: Air first, then Water
+                HStack(spacing: 6) {
+                    if let weather, let airTemp = weather.airTemperature {
                         HStack(spacing: 3) {
-                            Image(systemName: weather.conditionSymbol)
-                                .font(.system(size: 11))
-                                .symbolRenderingMode(.multicolor)
-                            if let airTemp = weather.airTemperature {
-                                Text(String(format: "%.0f°C", airTemp))
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            }
+                            Image(systemName: "sun.max.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(AppTheme.coral)
+                            Text(String(format: "%.0f°C", airTemp))
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundStyle(AppTheme.textPrimary)
                         }
-                        .foregroundStyle(AppTheme.textSecondary)
+
+                        Text("·")
+                            .font(.system(size: 10))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+
+                    HStack(spacing: 3) {
+                        Image(systemName: "drop.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(AppTheme.skyBlue)
+                        TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
                     }
 
                     Spacer()
@@ -165,21 +171,24 @@ struct LakeListRow: View {
 
             Spacer()
 
-            // Temperatures + Weather column
+            // Temperatures column: Air first, Water second
             VStack(alignment: .trailing, spacing: 5) {
-                TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
-
-                if let weather {
+                if let weather, let airTemp = weather.airTemperature {
                     HStack(spacing: 3) {
-                        Image(systemName: weather.conditionSymbol)
+                        Image(systemName: "sun.max.fill")
                             .font(.system(size: 10))
-                            .symbolRenderingMode(.multicolor)
-                        if let airTemp = weather.airTemperature {
-                            Text(String(format: "%.0f°C", airTemp))
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        }
+                            .foregroundStyle(AppTheme.coral)
+                        Text(String(format: "%.0f°C", airTemp))
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppTheme.textPrimary)
                     }
-                    .foregroundStyle(AppTheme.textSecondary)
+                }
+
+                HStack(spacing: 3) {
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(AppTheme.skyBlue)
+                    TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
                 }
             }
         }

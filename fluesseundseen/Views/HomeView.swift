@@ -21,35 +21,32 @@ struct HomeView: View {
     @State private var selectedTempRange: TempRange?
 
     // Sort
-    @State private var sortOption: SortOption = .standard
+    @State private var sortOption: SortOption = .nearest
 
     // Recent lakes
     @State private var recentLakes: [RecentLake] = []
 
     enum SortOption: String, CaseIterable {
-        case standard
         case nearest
         case warmest
+        case coldest
         case alphabetical
-        case bestQuality
 
         var label: String {
             switch self {
-            case .standard: return "Standard"
             case .nearest: return "Nächste"
             case .warmest: return "Wärmste"
+            case .coldest: return "Kälteste"
             case .alphabetical: return "A–Z"
-            case .bestQuality: return "Beste Qualität"
             }
         }
 
         var icon: String {
             switch self {
-            case .standard: return "arrow.up.arrow.down"
             case .nearest: return "location.fill"
             case .warmest: return "flame.fill"
+            case .coldest: return "snowflake"
             case .alphabetical: return "textformat.abc"
-            case .bestQuality: return "checkmark.seal.fill"
             }
         }
     }
@@ -84,10 +81,6 @@ struct HomeView: View {
         Array(dataService.sortedByDistance(from: locationService.userLocation).prefix(20))
     }
 
-    private var warmestLakes: [BathingWater] {
-        Array(dataService.sortedByTemperature().prefix(20))
-    }
-
     private var filteredLakes: [BathingWater] {
         var lakes = dataService.search(searchText)
         if let state = selectedState {
@@ -108,23 +101,16 @@ struct HomeView: View {
             }
         }
         switch sortOption {
-        case .standard:
-            break
         case .nearest:
             if let loc = locationService.userLocation {
                 lakes.sort { $0.distance(from: loc) < $1.distance(from: loc) }
             }
         case .warmest:
             lakes.sort { ($0.waterTemperature ?? -999) > ($1.waterTemperature ?? -999) }
+        case .coldest:
+            lakes.sort { ($0.waterTemperature ?? 999) < ($1.waterTemperature ?? 999) }
         case .alphabetical:
             lakes.sort { $0.name.localizedCompare($1.name) == .orderedAscending }
-        case .bestQuality:
-            let qualityOrder: [String: Int] = ["A": 0, "G": 1, "AU": 2, "M": 3]
-            lakes.sort {
-                let a = qualityOrder[$0.qualityRating?.uppercased() ?? ""] ?? 99
-                let b = qualityOrder[$1.qualityRating?.uppercased() ?? ""] ?? 99
-                return a < b
-            }
         }
         return lakes
     }
@@ -188,7 +174,7 @@ struct HomeView: View {
             return "\(total) Gewässer geladen. Temperaturdaten werden aktualisiert."
         }
         if warmLakeCount > 10 {
-            if let warmest = warmestLakes.first, let temp = warmest.waterTemperature {
+            if let warmest = dataService.sortedByTemperature().first, let temp = warmest.waterTemperature {
                 return "Super Badewetter! \(warmLakeCount) Seen über 20°C. \(warmest.name) führt mit \(String(format: "%.0f", temp))°C!"
             }
             return "Super Badewetter! \(warmLakeCount) Seen haben über 20°C!"
@@ -201,10 +187,6 @@ struct HomeView: View {
             return "Die Seen sind noch frisch — \(mildCount) haben über 14°C. Nur für Mutige!"
         }
         return "Brr! Die Seen sind noch kalt. Ducky empfiehlt: Warten."
-    }
-
-    private var lastMeasurementYear: String {
-        warmestLakes.first?.measurementYear ?? ""
     }
 
     var body: some View {
@@ -354,30 +336,6 @@ struct HomeView: View {
                         lakes: nearbyLakes,
                         showDistance: true
                     )
-                }
-
-                if !warmestLakes.isEmpty {
-                    VStack(alignment: .leading, spacing: 0) {
-                        lakeSection(
-                            title: Season.isOffSeason ? "Letzte Messungen" : "Am wärmsten",
-                            icon: Season.isOffSeason ? "clock.arrow.circlepath" : "flame.fill",
-                            iconColor: Season.isOffSeason ? AppTheme.textSecondary : AppTheme.coral,
-                            lakes: warmestLakes,
-                            showDistance: false
-                        )
-
-                        if Season.isOffSeason && !lastMeasurementYear.isEmpty {
-                            HStack(spacing: 4) {
-                                Image(systemName: "info.circle")
-                                    .font(.system(size: 11))
-                                Text("Wassertemperaturen vom Sommer \(lastMeasurementYear)")
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                            }
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .padding(.horizontal, 20)
-                            .padding(.top, 6)
-                        }
-                    }
                 }
 
                 WaveDivider(color: AppTheme.teal, height: 24)
@@ -535,18 +493,10 @@ struct HomeView: View {
                     label: "Gewässer",
                     color: AppTheme.oceanBlue
                 )
-                if let warmest = warmestLakes.first, let temp = warmest.waterTemperature {
-                    statChip(
-                        icon: Season.isOffSeason ? "clock.arrow.circlepath" : "thermometer.sun.fill",
-                        value: String(format: "%.0f°C", temp),
-                        label: Season.isOffSeason ? "Sommer \(lastMeasurementYear)" : "Wärmstes",
-                        color: Season.isOffSeason ? AppTheme.textSecondary : AppTheme.coral
-                    )
-                }
                 statChip(
                     icon: "checkmark.seal.fill",
                     value: "\(dataService.lakes.filter { $0.qualityRating?.uppercased() == "A" }.count)",
-                    label: "Ausgezeichnet",
+                    label: "Top Qualität",
                     color: AppTheme.freshGreen
                 )
                 statChip(
@@ -663,13 +613,10 @@ struct HomeView: View {
                             Text(sortOption.label)
                                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                         }
-                        .foregroundStyle(sortOption == .standard ? AppTheme.textSecondary : AppTheme.oceanBlue)
+                        .foregroundStyle(AppTheme.oceanBlue)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(
-                            (sortOption == .standard ? AppTheme.divider : AppTheme.oceanBlue.opacity(0.1)),
-                            in: Capsule()
-                        )
+                        .background(AppTheme.oceanBlue.opacity(0.1), in: Capsule())
                     }
 
                     Text("\(filteredLakes.count)")

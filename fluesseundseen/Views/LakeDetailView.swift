@@ -60,11 +60,11 @@ struct LakeDetailView: View {
         ZStack(alignment: .bottom) {
             ZStack {
                 lake.duckState.backgroundGradient
-                    .frame(height: 340)
+                    .frame(height: 380)
 
                 // Floating bubbles
                 FloatingBubblesView(count: 5, color: .white.opacity(0.25))
-                    .frame(height: 340)
+                    .frame(height: 380)
             }
 
             // Wave at bottom of hero
@@ -75,14 +75,14 @@ struct LakeDetailView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                DuckView(state: lake.duckState, size: 130)
+                DuckView(state: lake.duckState, size: 120)
                     .scaleEffect(appear ? 1 : 0.7)
                     .opacity(appear ? 1 : 0)
-                    .padding(.bottom, 12)
+                    .padding(.bottom, 10)
 
                 VStack(spacing: 6) {
                     Text(lake.name)
-                        .font(.system(size: 30, weight: .heavy, design: .rounded))
+                        .font(.system(size: 28, weight: .heavy, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
                         .multilineTextAlignment(.center)
 
@@ -115,21 +115,74 @@ struct LakeDetailView: View {
                     }
                 }
 
-                // Temperature
-                TemperatureBadge(
-                    temperature: lake.waterTemperature,
-                    size: .hero,
-                    isOutdated: lake.isTemperatureOutdated,
-                    measurementDate: lake.measurementDate
-                )
-                .padding(.top, 12)
+                // Temperature display: Air + Water side by side
+                HStack(spacing: 0) {
+                    // Air temperature
+                    if let weather, let airTemp = weather.airTemperature {
+                        VStack(spacing: 4) {
+                            Image(systemName: "sun.max.fill")
+                                .font(.system(size: 20))
+                                .foregroundStyle(AppTheme.coral)
+                            HStack(alignment: .top, spacing: 2) {
+                                Text(String(format: "%.0f", airTemp))
+                                    .font(.system(size: 36, weight: .heavy, design: .rounded))
+                                    .foregroundStyle(AppTheme.coral)
+                                Text("°C")
+                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(AppTheme.coral.opacity(0.7))
+                                    .padding(.top, 5)
+                            }
+                            Text("Luft")
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+
+                    // Water temperature
+                    VStack(spacing: 4) {
+                        Image(systemName: "drop.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(lake.temperatureColor)
+                        if let temp = lake.waterTemperature {
+                            HStack(alignment: .top, spacing: 2) {
+                                Text(String(format: "%.1f", temp))
+                                    .font(.system(size: 36, weight: .heavy, design: .rounded))
+                                    .foregroundStyle(lake.isTemperatureOutdated ? lake.temperatureColor.opacity(0.5) : lake.temperatureColor)
+                                Text("°C")
+                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(lake.temperatureColor.opacity(lake.isTemperatureOutdated ? 0.35 : 0.7))
+                                    .padding(.top, 5)
+                            }
+                        } else {
+                            Image(systemName: "thermometer.medium.slash")
+                                .font(.system(size: 24, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 8)
+                        }
+                        Text("Wasser")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AppTheme.textSecondary)
+                        if lake.isTemperatureOutdated {
+                            HStack(spacing: 3) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                    .font(.system(size: 10))
+                                Text("Stand: \(lake.measurementDate ?? "unbekannt")")
+                                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                            }
+                            .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .padding(.top, 14)
 
                 // Duck quote
                 Text("\u{201E}\(lake.duckState.line)\u{201C}")
                     .font(.system(size: 15, weight: .medium, design: .rounded))
                     .foregroundStyle(AppTheme.textSecondary)
                     .italic()
-                    .padding(.top, 6)
+                    .padding(.top, 8)
 
                 Spacer(minLength: 28)
             }
@@ -347,6 +400,19 @@ struct LakeDetailView: View {
                 status: lake.enterococciStatus,
                 showValue: showBacteriaValues
             )
+
+            if let date = lake.measurementDate {
+                Divider()
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Text("Gemessen am \(date)")
+                        .font(AppTheme.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                }
+            }
         }
         .appCard()
     }
@@ -354,37 +420,52 @@ struct LakeDetailView: View {
     // MARK: - Visibility Card
 
     private func visibilityCard(_ depth: Double) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: "eye.fill")
-                .font(.system(size: 20))
-                .foregroundStyle(AppTheme.skyBlue)
-                .frame(width: 40, height: 40)
-                .background(AppTheme.skyBlue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        VStack(spacing: 12) {
+            HStack(spacing: 14) {
+                Image(systemName: "eye.fill")
+                    .font(.system(size: 20))
+                    .foregroundStyle(AppTheme.skyBlue)
+                    .frame(width: 40, height: 40)
+                    .background(AppTheme.skyBlue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Sichttiefe")
-                    .font(AppTheme.cardTitle)
-                    .foregroundStyle(AppTheme.textPrimary)
-                Text(String(format: "%.1f Meter", depth))
-                    .font(AppTheme.bodyText)
-                    .foregroundStyle(AppTheme.textSecondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Sichttiefe")
+                        .font(AppTheme.cardTitle)
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(String(format: "%.1f Meter", depth))
+                        .font(AppTheme.bodyText)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+
+                Spacer()
+
+                // Visual depth bar
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(AppTheme.divider)
+                        .frame(width: 80, height: 8)
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [AppTheme.skyBlue, AppTheme.oceanBlue],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                        )
+                        .frame(width: min(CGFloat(depth / 8.0) * 80, 80), height: 8)
+                }
             }
 
-            Spacer()
-
-            // Visual depth bar
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(AppTheme.divider)
-                    .frame(width: 80, height: 8)
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [AppTheme.skyBlue, AppTheme.oceanBlue],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                    )
-                    .frame(width: min(CGFloat(depth / 8.0) * 80, 80), height: 8)
+            if let date = lake.measurementDate {
+                Divider()
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Text("Gemessen am \(date)")
+                        .font(AppTheme.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                }
             }
         }
         .appCard()

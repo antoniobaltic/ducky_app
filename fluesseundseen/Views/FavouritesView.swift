@@ -264,20 +264,24 @@ private struct FavouriteRowContent: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 6) {
-                TemperatureBadge(temperature: temp, size: .small, isOutdated: live?.isTemperatureOutdated ?? Season.isOffSeason)
-
-                // Air temperature + weather
-                if let weather {
+                // Air temperature first
+                if let weather, let airTemp = weather.airTemperature {
                     HStack(spacing: 3) {
-                        Image(systemName: weather.conditionSymbol)
+                        Image(systemName: "sun.max.fill")
                             .font(.system(size: 10))
-                            .symbolRenderingMode(.multicolor)
-                        if let airTemp = weather.airTemperature {
-                            Text(String(format: "%.0f°C", airTemp))
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        }
+                            .foregroundStyle(AppTheme.coral)
+                        Text(String(format: "%.0f°C", airTemp))
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppTheme.textPrimary)
                     }
-                    .foregroundStyle(AppTheme.textSecondary)
+                }
+
+                // Water temperature second
+                HStack(spacing: 3) {
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(AppTheme.skyBlue)
+                    TemperatureBadge(temperature: temp, size: .small, isOutdated: live?.isTemperatureOutdated ?? Season.isOffSeason)
                 }
 
                 Button(action: toggleNotifications) {
