@@ -42,6 +42,16 @@ struct FavouritesView: View {
                             .padding(.bottom, 16)
                         }
                     }
+                    .refreshable {
+                        await dataService.refresh()
+                        Haptics.success()
+                        for fav in favourites {
+                            if let live = liveData(for: fav) {
+                                fav.lastKnownTemperature = live.waterTemperature
+                                fav.lastKnownQuality = live.qualityRating
+                            }
+                        }
+                    }
                 }
             }
             .navigationTitle("Favoriten")
@@ -124,6 +134,7 @@ struct FavouritesView: View {
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
+                Haptics.medium()
                 modelContext.delete(fav)
             } label: {
                 Label("Entfernen", systemImage: "heart.slash.fill")

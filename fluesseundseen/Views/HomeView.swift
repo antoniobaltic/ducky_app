@@ -1,10 +1,13 @@
 import SwiftUI
 import SwiftData
+import CoreLocation
 
 struct HomeView: View {
     @Environment(DataService.self) private var dataService
     @Environment(LocationService.self) private var locationService
     @Environment(WeatherService.self) private var weatherService
+    @Environment(\.modelContext) private var modelContext
+    @Query var favourites: [FavouriteItem]
     @State private var selectedLake: BathingWater?
     @State private var searchText = ""
     @State private var showAllLakes = false
@@ -16,6 +19,40 @@ struct HomeView: View {
     // Filters
     @State private var selectedQuality: String?
     @State private var selectedTempRange: TempRange?
+
+    // Sort
+    @State private var sortOption: SortOption = .standard
+
+    // Recent lakes
+    @State private var recentLakes: [RecentLake] = []
+
+    enum SortOption: String, CaseIterable {
+        case standard
+        case nearest
+        case warmest
+        case alphabetical
+        case bestQuality
+
+        var label: String {
+            switch self {
+            case .standard: return "Standard"
+            case .nearest: return "Nächste"
+            case .warmest: return "Wärmste"
+            case .alphabetical: return "A–Z"
+            case .bestQuality: return "Beste Qualität"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .standard: return "arrow.up.arrow.down"
+            case .nearest: return "location.fill"
+            case .warmest: return "flame.fill"
+            case .alphabetical: return "textformat.abc"
+            case .bestQuality: return "checkmark.seal.fill"
+            }
+        }
+    }
 
     enum TempRange: String, CaseIterable {
         case warm
@@ -68,6 +105,25 @@ struct HomeView: View {
                     guard let t = $0.waterTemperature else { return false }
                     return t >= 14 && t < 20
                 }
+            }
+        }
+        switch sortOption {
+        case .standard:
+            break
+        case .nearest:
+            if let loc = locationService.userLocation {
+                lakes.sort { $0.distance(from: loc) < $1.distance(from: loc) }
+            }
+        case .warmest:
+            lakes.sort { ($0.waterTemperature ?? -999) > ($1.waterTemperature ?? -999) }
+        case .alphabetical:
+            lakes.sort { $0.name.localizedCompare($1.name) == .orderedAscending }
+        case .bestQuality:
+            let qualityOrder: [String: Int] = ["A": 0, "G": 1, "AU": 2, "M": 3]
+            lakes.sort {
+                let a = qualityOrder[$0.qualityRating?.uppercased() ?? ""] ?? 99
+                let b = qualityOrder[$1.qualityRating?.uppercased() ?? ""] ?? 99
+                return a < b
             }
         }
         return lakes
@@ -168,6 +224,7 @@ struct HomeView: View {
                 .scrollDismissesKeyboard(.interactively)
                 .refreshable {
                     await dataService.refresh()
+                    Haptics.success()
                 }
             }
             .navigationTitle("Entdecken")
@@ -197,6 +254,7 @@ struct HomeView: View {
             await dataService.loadData()
             locationService.requestPermission()
             locationService.startUpdating()
+            recentLakes = RecentLake.load()
         }
     }
 
@@ -276,6 +334,11 @@ struct HomeView: View {
     private var contentSections: some View {
         VStack(spacing: isSearchActive ? 16 : 28) {
             searchBar
+
+            // Recent lakes shown when search is focused but empty
+            if isSearchFocused && searchText.isEmpty && !recentLakes.isEmpty && !isSearchActive {
+                recentLakesSection
+            }
 
             if isSearchActive {
                 searchFilters
@@ -560,6 +623,7 @@ struct HomeView: View {
                                 distanceKm: showDistance ? locationService.userLocation.map { lake.distance(from: $0) } : nil
                             )
                             .onTapGesture { selectedLake = lake }
+                            .contextMenu { lakeContextMenu(lake) }
                         }
                     }
                     .padding(.horizontal, 20)
@@ -581,6 +645,32 @@ struct HomeView: View {
                         .font(AppTheme.sectionTitle)
                         .foregroundStyle(AppTheme.textPrimary)
                     Spacer()
+
+                    Menu {
+                        ForEach(SortOption.allCases, id: \.rawValue) { option in
+                            Button {
+                                withAnimation(AppTheme.quickSpring) { sortOption = option }
+                                Haptics.light()
+                            } label: {
+                                Label(option.label, systemImage: option.icon)
+                            }
+                            .disabled(option == .nearest && locationService.userLocation == nil)
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: sortOption.icon)
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(sortOption.label)
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        }
+                        .foregroundStyle(sortOption == .standard ? AppTheme.textSecondary : AppTheme.oceanBlue)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            (sortOption == .standard ? AppTheme.divider : AppTheme.oceanBlue.opacity(0.1)),
+                            in: Capsule()
+                        )
+                    }
 
                     Text("\(filteredLakes.count)")
                         .font(.system(size: 14, weight: .bold, design: .rounded))
@@ -611,10 +701,12 @@ struct HomeView: View {
                     Button { selectedLake = lake } label: {
                         LakeListRow(
                             lake: lake,
-                            distanceKm: locationService.userLocation.map { lake.distance(from: $0) }
+                            distanceKm: locationService.userLocation.map { lake.distance(from: $0) },
+                            isFavourite: favourites.contains { $0.lakeID == lake.id }
                         )
                     }
                     .buttonStyle(.plain)
+                    .contextMenu { lakeContextMenu(lake) }
 
                     if lake.id != filteredLakes.prefix(showAllLakes ? 999 : 20).last?.id {
                         Divider()
@@ -647,7 +739,10 @@ struct HomeView: View {
     }
 
     private func filterChip(label: String, icon: String? = nil, iconColor: Color? = nil, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button {
+            Haptics.light()
+            action()
+        } label: {
             HStack(spacing: 5) {
                 if let icon {
                     Image(systemName: icon)
@@ -670,6 +765,101 @@ struct HomeView: View {
             )
         }
         .animation(AppTheme.quickSpring, value: isSelected)
+    }
+
+    // MARK: - Recent Lakes Section
+
+    private var recentLakesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                Text("Zuletzt angesehen")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            .padding(.horizontal, 20)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(recentLakes) { recent in
+                        Button {
+                            if let lake = dataService.lake(withID: recent.id) {
+                                selectedLake = lake
+                                isSearchFocused = false
+                            }
+                        } label: {
+                            Text(recent.name)
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(AppTheme.oceanBlue)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .background(AppTheme.oceanBlue.opacity(0.08), in: Capsule())
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+
+    // MARK: - Context Menu
+
+    @ViewBuilder
+    private func lakeContextMenu(_ lake: BathingWater) -> some View {
+        let isFav = favourites.contains { $0.lakeID == lake.id }
+
+        ShareLink(item: shareText(for: lake)) {
+            Label("Teilen", systemImage: "square.and.arrow.up")
+        }
+
+        Button {
+            Haptics.medium()
+            toggleFavourite(lake)
+        } label: {
+            Label(isFav ? "Favorit entfernen" : "Zu Favoriten", systemImage: isFav ? "heart.slash.fill" : "heart")
+        }
+
+        Button {
+            openInMaps(lake)
+        } label: {
+            Label("Route", systemImage: "map.fill")
+        }
+    }
+
+    private func shareText(for lake: BathingWater) -> String {
+        var text = "\(lake.name)"
+        if let temp = lake.waterTemperature {
+            text += " – \(String(format: "%.1f°C", temp)) Wassertemperatur"
+        }
+        text += " \(lake.qualityLabel)"
+        if let municipality = lake.municipality {
+            text += " (\(municipality))"
+        }
+        text += "\n🦆 via Flüsse & Seen"
+        return text
+    }
+
+    private func toggleFavourite(_ lake: BathingWater) {
+        if let existing = favourites.first(where: { $0.lakeID == lake.id }) {
+            modelContext.delete(existing)
+        } else {
+            let item = FavouriteItem(
+                lakeID: lake.id,
+                lakeName: lake.name,
+                municipalityName: lake.municipality,
+                lastKnownTemperature: lake.waterTemperature,
+                lastKnownQuality: lake.qualityRating
+            )
+            modelContext.insert(item)
+        }
+    }
+
+    private func openInMaps(_ lake: BathingWater) {
+        let coordinate = lake.coordinate
+        guard let url = URL(string: "maps://?q=\(lake.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? lake.name)&ll=\(coordinate.latitude),\(coordinate.longitude)") else { return }
+        UIApplication.shared.open(url)
     }
 }
 

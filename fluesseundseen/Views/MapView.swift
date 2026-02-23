@@ -63,6 +63,22 @@ struct MapView: View {
                 }
             }
             .navigationTitle("Karte")
+            .toolbar {
+                ToolbarItem(placement: .iOSTopBarTrailing) {
+                    Button {
+                        Task {
+                            await dataService.refresh()
+                            Haptics.success()
+                        }
+                    } label: {
+                        Image(systemName: dataService.isLoading ? "arrow.trianglehead.2.counterclockwise" : "arrow.trianglehead.2.counterclockwise.rotate.90")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .symbolEffect(.rotate, isActive: dataService.isLoading)
+                    }
+                    .disabled(dataService.isLoading)
+                }
+            }
             .task {
                 await dataService.loadData()
             }

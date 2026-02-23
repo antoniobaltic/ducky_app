@@ -50,6 +50,7 @@ struct LakeDetailView: View {
         }
         .onAppear {
             withAnimation(.easeOut(duration: 0.6)) { appear = true }
+            RecentLake.add(RecentLake(id: lake.id, name: lake.name))
         }
     }
 
@@ -479,6 +480,7 @@ struct LakeDetailView: View {
     // MARK: - Actions
 
     private func toggleFavourite() {
+        Haptics.medium()
         if let existing = favourites.first(where: { $0.lakeID == lake.id }) {
             modelContext.delete(existing)
         } else {
