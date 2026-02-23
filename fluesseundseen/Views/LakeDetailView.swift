@@ -60,11 +60,11 @@ struct LakeDetailView: View {
         ZStack(alignment: .bottom) {
             ZStack {
                 lake.duckState.backgroundGradient
-                    .frame(height: 380)
+                    .frame(height: 370)
 
                 // Floating bubbles
                 FloatingBubblesView(count: 5, color: .white.opacity(0.25))
-                    .frame(height: 380)
+                    .frame(height: 370)
             }
 
             // Wave at bottom of hero
@@ -73,13 +73,26 @@ struct LakeDetailView: View {
                 .offset(y: 14)
 
             VStack(spacing: 0) {
-                Spacer()
+                Spacer(minLength: 80)
 
-                DuckView(state: lake.duckState, size: 120)
-                    .scaleEffect(appear ? 1 : 0.7)
-                    .opacity(appear ? 1 : 0)
-                    .padding(.bottom, 10)
+                // Ducky left + quote right
+                HStack(alignment: .center, spacing: 14) {
+                    DuckView(state: lake.duckState, size: 90)
+                        .scaleEffect(appear ? 1 : 0.7)
+                        .opacity(appear ? 1 : 0)
 
+                    Text("\u{201E}\(lake.duckState.line)\u{201C}")
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .italic()
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer()
+                }
+                .padding(.bottom, 12)
+
+                // Name + location
                 VStack(spacing: 6) {
                     Text(lake.name)
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
@@ -143,15 +156,15 @@ struct LakeDetailView: View {
                     VStack(spacing: 4) {
                         Image(systemName: "drop.fill")
                             .font(.system(size: 20))
-                            .foregroundStyle(lake.temperatureColor)
+                            .foregroundStyle(AppTheme.oceanBlue)
                         if let temp = lake.waterTemperature {
                             HStack(alignment: .top, spacing: 2) {
                                 Text(String(format: "%.1f", temp))
                                     .font(.system(size: 36, weight: .heavy, design: .rounded))
-                                    .foregroundStyle(lake.isTemperatureOutdated ? lake.temperatureColor.opacity(0.5) : lake.temperatureColor)
+                                    .foregroundStyle(lake.isTemperatureOutdated ? AppTheme.oceanBlue.opacity(0.5) : AppTheme.oceanBlue)
                                 Text("°C")
                                     .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(lake.temperatureColor.opacity(lake.isTemperatureOutdated ? 0.35 : 0.7))
+                                    .foregroundStyle(AppTheme.oceanBlue.opacity(lake.isTemperatureOutdated ? 0.35 : 0.7))
                                     .padding(.top, 5)
                             }
                         } else {
@@ -176,13 +189,6 @@ struct LakeDetailView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .padding(.top, 14)
-
-                // Duck quote
-                Text("\u{201E}\(lake.duckState.line)\u{201C}")
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .italic()
-                    .padding(.top, 8)
 
                 Spacer(minLength: 28)
             }
@@ -212,7 +218,6 @@ struct LakeDetailView: View {
                 visibilityCard(depth)
             }
 
-            verdictCard
             mapCard
             routeButton
         }
@@ -469,52 +474,6 @@ struct LakeDetailView: View {
             }
         }
         .appCard()
-    }
-
-    // MARK: - Verdict Card
-
-    private var verdictCard: some View {
-        HStack(spacing: 16) {
-            DuckBadge(state: lake.duckState, size: 54)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Duckys Urteil")
-                    .font(AppTheme.cardTitle)
-                    .foregroundStyle(AppTheme.textPrimary)
-                Text(verdictSentence)
-                    .font(AppTheme.bodyText)
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer()
-        }
-        .appCard()
-    }
-
-    private var verdictSentence: String {
-        if lake.isClosed {
-            return "Dieses Gewässer ist aktuell gesperrt."
-        }
-        // Outdated data: reflect staleness
-        if lake.isTemperatureOutdated {
-            if let temp = lake.waterTemperature, let date = lake.measurementDate {
-                return "Letzte Messung: \(String(format: "%.1f°C", temp)) am \(date). Neue Daten ab Juni."
-            }
-            return "Keine aktuellen Messdaten. Neue Daten ab Juni."
-        }
-        guard let temp = lake.waterTemperature else {
-            return "Keine aktuellen Temperaturdaten verfügbar."
-        }
-        let tempStr = String(format: "%.1f°C", temp)
-        switch lake.duckState {
-        case .begeistert: return "\(tempStr) Wassertemperatur — perfekte Bedingungen!"
-        case .zufrieden:  return "\(tempStr) Wassertemperatur — angenehm zum Baden."
-        case .zoegernd:   return "\(tempStr) Wassertemperatur — nur für Mutige."
-        case .frierend:   return "\(tempStr) Wassertemperatur — besser warten."
-        case .warnend:    return "Die Wasserqualität ist aktuell mangelhaft."
-        }
     }
 
     // MARK: - Map Card
