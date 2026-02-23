@@ -5,7 +5,10 @@ import MapKit
 struct MapView: View {
     @Environment(DataService.self) private var dataService
     @Environment(LocationService.self) private var locationService
+    @Environment(WeatherService.self) private var weatherService
     @State private var selectedLake: BathingWater?
+    @State private var selectedWeather: LakeWeather?
+    @State private var visibleRegion: MKCoordinateRegion?
     @State private var cameraPosition: MapCameraPosition = .region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 47.5, longitude: 14.0),
@@ -13,11 +16,24 @@ struct MapView: View {
         )
     )
 
+    /// Lakes filtered to the visible map region for performance
+    private var visibleLakes: [BathingWater] {
+        guard let region = visibleRegion else { return dataService.lakes }
+        let latDelta = region.span.latitudeDelta / 2
+        let lonDelta = region.span.longitudeDelta / 2
+        let centerLat = region.center.latitude
+        let centerLon = region.center.longitude
+        return dataService.lakes.filter { lake in
+            abs(lake.latitude - centerLat) <= latDelta &&
+            abs(lake.longitude - centerLon) <= lonDelta
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
                 Map(position: $cameraPosition, selection: $selectedLake) {
-                    ForEach(dataService.lakes) { lake in
+                    ForEach(visibleLakes) { lake in
                         Annotation(lake.name, coordinate: lake.coordinate, anchor: .bottom) {
                             DuckPinView(state: lake.duckState)
                                 .scaleEffect(selectedLake?.id == lake.id ? 1.3 : 1.0)
@@ -30,11 +46,14 @@ struct MapView: View {
                         UserAnnotation()
                     }
                 }
-                .mapStyle(.standard(elevation: .realistic))
+                .mapStyle(.standard)
                 .mapControls {
                     MapUserLocationButton()
                     MapCompass()
                     MapScaleView()
+                }
+                .onMapCameraChange(frequency: .onEnd) { context in
+                    visibleRegion = context.region
                 }
 
                 // Bottom sheet
@@ -49,6 +68,7 @@ struct MapView: View {
             }
         }
         .onChange(of: selectedLake) { _, new in
+            selectedWeather = nil
             if let lake = new {
                 withAnimation(.easeInOut(duration: 0.5)) {
                     cameraPosition = .region(
@@ -58,6 +78,7 @@ struct MapView: View {
                         )
                     )
                 }
+                Task { selectedWeather = await weatherService.fetchWeather(for: lake) }
             }
         }
     }
@@ -106,6 +127,21 @@ struct MapView: View {
 
                     HStack(spacing: 8) {
                         TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
+
+                        // Air temperature + weather
+                        if let weather = selectedWeather {
+                            HStack(spacing: 3) {
+                                Image(systemName: weather.conditionSymbol)
+                                    .font(.system(size: 11))
+                                    .symbolRenderingMode(.multicolor)
+                                if let airTemp = weather.airTemperature {
+                                    Text(String(format: "%.0f°C", airTemp))
+                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                }
+                            }
+                            .foregroundStyle(AppTheme.textSecondary)
+                        }
+
                         QualityBadge(qualityLabel: lake.qualityLabel, qualityColor: lake.qualityColor)
                     }
                 }
@@ -148,5 +184,6 @@ struct MapView: View {
     MapView()
         .environment(DataService.shared)
         .environment(LocationService.shared)
+        .environment(WeatherService.shared)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }

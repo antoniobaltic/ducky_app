@@ -4,11 +4,44 @@ import SwiftData
 struct HomeView: View {
     @Environment(DataService.self) private var dataService
     @Environment(LocationService.self) private var locationService
+    @Environment(WeatherService.self) private var weatherService
     @State private var selectedLake: BathingWater?
     @State private var searchText = ""
     @State private var showAllLakes = false
     @State private var selectedState: String?
     @State private var heroAppear = false
+    @State private var showSettings = false
+    @FocusState private var isSearchFocused: Bool
+
+    // Filters
+    @State private var selectedQuality: String?
+    @State private var selectedTempRange: TempRange?
+
+    enum TempRange: String, CaseIterable {
+        case warm
+        case mild
+
+        var label: String {
+            switch self {
+            case .warm: return "≥ 20°C"
+            case .mild: return "14–20°C"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .warm: return "flame.fill"
+            case .mild: return "thermometer.medium"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .warm: return AppTheme.coral
+            case .mild: return AppTheme.skyBlue
+            }
+        }
+    }
 
     private var nearbyLakes: [BathingWater] {
         Array(dataService.sortedByDistance(from: locationService.userLocation).prefix(20))
@@ -23,7 +56,33 @@ struct HomeView: View {
         if let state = selectedState {
             lakes = lakes.filter { $0.state == state }
         }
+        if let quality = selectedQuality {
+            lakes = lakes.filter { $0.qualityRating?.uppercased() == quality }
+        }
+        if let range = selectedTempRange {
+            switch range {
+            case .warm:
+                lakes = lakes.filter { ($0.waterTemperature ?? 0) >= 20 }
+            case .mild:
+                lakes = lakes.filter {
+                    guard let t = $0.waterTemperature else { return false }
+                    return t >= 14 && t < 20
+                }
+            }
+        }
         return lakes
+    }
+
+    private var isSearchActive: Bool {
+        !searchText.isEmpty || selectedQuality != nil || selectedTempRange != nil
+    }
+
+    private var activeFilterCount: Int {
+        var count = 0
+        if selectedQuality != nil { count += 1 }
+        if selectedTempRange != nil { count += 1 }
+        if selectedState != nil { count += 1 }
+        return count
     }
 
     // MARK: - Contextual hero data
@@ -40,9 +99,7 @@ struct HomeView: View {
 
     private var heroState: DuckState {
         if dataService.isLoading { return .zufrieden }
-        // Off-season: use seasonal duck state
         if Season.isOffSeason { return season.duckState }
-        // In-season: data-driven
         if warmLakeCount > 10 { return .begeistert }
         if warmLakeCount > 0 { return .zufrieden }
         if lakesWithTemperature > 0 {
@@ -53,9 +110,7 @@ struct HomeView: View {
     }
 
     private var heroGreeting: String {
-        // Off-season: use seasonal title
         if Season.isOffSeason { return season.heroTitle }
-        // In-season: time-of-day greeting
         let hour = Calendar.current.component(.hour, from: Date())
         if hour < 6 { return "Gute Nacht!" }
         if hour < 12 { return "Guten Morgen!" }
@@ -67,44 +122,31 @@ struct HomeView: View {
         if dataService.isLoading {
             return "Ducky checkt die Wassertemperaturen..."
         }
-
-        // Off-season: seasonal message
-        if Season.isOffSeason {
-            return season.heroMessage
-        }
+        if Season.isOffSeason { return season.heroMessage }
 
         let total = dataService.lakes.count
-
         if total == 0 {
             return "Entdecke Österreichs schönste Badegewässer!"
         }
-
-        // In-season: no temperature data yet
         if lakesWithTemperature == 0 {
             return "\(total) Gewässer geladen. Temperaturdaten werden aktualisiert."
         }
-
-        // In-season: data-driven messages
         if warmLakeCount > 10 {
             if let warmest = warmestLakes.first, let temp = warmest.waterTemperature {
                 return "Super Badewetter! \(warmLakeCount) Seen über 20°C. \(warmest.name) führt mit \(String(format: "%.0f", temp))°C!"
             }
             return "Super Badewetter! \(warmLakeCount) Seen haben über 20°C!"
         }
-
         if warmLakeCount > 0 {
             return "\(warmLakeCount) von \(lakesWithTemperature) Seen sind warm genug zum Baden."
         }
-
         let mildCount = dataService.lakes.filter { ($0.waterTemperature ?? 0) >= 14 }.count
         if mildCount > 0 {
             return "Die Seen sind noch frisch — \(mildCount) haben über 14°C. Nur für Mutige!"
         }
-
         return "Brr! Die Seen sind noch kalt. Ducky empfiehlt: Warten."
     }
 
-    /// Year of the last measurement data, e.g. "2025"
     private var lastMeasurementYear: String {
         warmestLakes.first?.measurementYear ?? ""
     }
@@ -117,10 +159,13 @@ struct HomeView: View {
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
-                        heroSection
+                        if !isSearchActive {
+                            heroSection
+                        }
                         contentSections
                     }
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .refreshable {
                     await dataService.refresh()
                 }
@@ -129,13 +174,23 @@ struct HomeView: View {
             .iOSNavigationBarStyle()
             .toolbar {
                 ToolbarItem(placement: .iOSTopBarTrailing) {
-                    if dataService.isLoading {
-                        ProgressView()
+                    HStack(spacing: 14) {
+                        if dataService.isLoading {
+                            ProgressView()
+                        }
+                        Button { showSettings = true } label: {
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
                     }
                 }
             }
             .navigationDestination(item: $selectedLake) { lake in
                 LakeDetailView(lake: lake)
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
             }
         }
         .task {
@@ -149,11 +204,8 @@ struct HomeView: View {
 
     private var heroSection: some View {
         ZStack(alignment: .bottom) {
-            // Background gradient card — seasonal
             ZStack {
                 season.heroGradient
-
-                // Seasonal particle effects (snow, leaves, blossoms, or bubbles)
                 SeasonalOverlay(season: season)
             }
             .frame(height: 310)
@@ -163,26 +215,21 @@ struct HomeView: View {
             .padding(.horizontal, 16)
             .shadow(color: season.heroGradientColors.last?.opacity(0.25) ?? AppTheme.oceanBlue.opacity(0.2), radius: 20, y: 10)
 
-            // Wave at the bottom of hero
             WaterWaveView(baseColor: season.waveColor, height: 35, speed: 0.8)
                 .frame(height: 35)
                 .offset(y: 15)
                 .padding(.horizontal, 16)
 
-            // Content overlay
             VStack(spacing: 10) {
-                // Duck
                 ZStack {
                     Circle()
                         .fill(.white.opacity(0.08))
                         .frame(width: 130, height: 130)
                         .scaleEffect(heroAppear ? 1.05 : 0.95)
-
                     DuckView(state: heroState, size: 110)
                 }
                 .frame(height: 130)
 
-                // Season icon + greeting
                 HStack(spacing: 6) {
                     if Season.isOffSeason {
                         Image(systemName: season.heroIcon)
@@ -193,7 +240,6 @@ struct HomeView: View {
                 }
                 .foregroundStyle(.white.opacity(Season.isOffSeason ? 1.0 : 0.75))
 
-                // Contextual message
                 Text(heroMessage)
                     .font(.system(size: Season.isOffSeason ? 15 : 17, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(Season.isOffSeason ? 0.85 : 1.0))
@@ -228,55 +274,159 @@ struct HomeView: View {
     // MARK: - Content
 
     private var contentSections: some View {
-        VStack(spacing: 28) {
+        VStack(spacing: isSearchActive ? 16 : 28) {
             searchBar
-            statsRow
 
-            if locationService.isAuthorized {
-                lakeSection(
-                    title: "In deiner Nähe",
-                    icon: "location.fill",
-                    iconColor: AppTheme.oceanBlue,
-                    lakes: nearbyLakes,
-                    showDistance: true
-                )
+            if isSearchActive {
+                searchFilters
+                allLakesSection
+            } else {
+                statsRow
+
+                if locationService.isAuthorized {
+                    lakeSection(
+                        title: "In deiner Nähe",
+                        icon: "location.fill",
+                        iconColor: AppTheme.oceanBlue,
+                        lakes: nearbyLakes,
+                        showDistance: true
+                    )
+                }
+
+                if !warmestLakes.isEmpty {
+                    VStack(alignment: .leading, spacing: 0) {
+                        lakeSection(
+                            title: Season.isOffSeason ? "Letzte Messungen" : "Am wärmsten",
+                            icon: Season.isOffSeason ? "clock.arrow.circlepath" : "flame.fill",
+                            iconColor: Season.isOffSeason ? AppTheme.textSecondary : AppTheme.coral,
+                            lakes: warmestLakes,
+                            showDistance: false
+                        )
+
+                        if Season.isOffSeason && !lastMeasurementYear.isEmpty {
+                            HStack(spacing: 4) {
+                                Image(systemName: "info.circle")
+                                    .font(.system(size: 11))
+                                Text("Wassertemperaturen vom Sommer \(lastMeasurementYear)")
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                            }
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 6)
+                        }
+                    }
+                }
+
+                WaveDivider(color: AppTheme.teal, height: 24)
+                    .padding(.horizontal, 16)
+
+                allLakesSection
+                dataAttributionFooter
+            }
+        }
+        .padding(.bottom, 40)
+    }
+
+    // MARK: - Search Filters
+
+    private var searchFilters: some View {
+        VStack(spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    filterChip(label: "Ausgezeichnet", icon: "checkmark.seal.fill", iconColor: AppTheme.freshGreen, isSelected: selectedQuality == "A") {
+                        withAnimation(AppTheme.quickSpring) { selectedQuality = selectedQuality == "A" ? nil : "A" }
+                    }
+                    filterChip(label: "Gut", icon: "hand.thumbsup.fill", iconColor: AppTheme.teal, isSelected: selectedQuality == "G") {
+                        withAnimation(AppTheme.quickSpring) { selectedQuality = selectedQuality == "G" ? nil : "G" }
+                    }
+
+                    Rectangle()
+                        .fill(AppTheme.divider)
+                        .frame(width: 1, height: 20)
+
+                    ForEach(TempRange.allCases, id: \.rawValue) { range in
+                        filterChip(label: range.label, icon: range.icon, iconColor: range.color, isSelected: selectedTempRange == range) {
+                            withAnimation(AppTheme.quickSpring) { selectedTempRange = selectedTempRange == range ? nil : range }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
             }
 
-            if !warmestLakes.isEmpty {
-                VStack(alignment: .leading, spacing: 0) {
-                    lakeSection(
-                        title: Season.isOffSeason ? "Letzte Messungen" : "Am wärmsten",
-                        icon: Season.isOffSeason ? "clock.arrow.circlepath" : "flame.fill",
-                        iconColor: Season.isOffSeason ? AppTheme.textSecondary : AppTheme.coral,
-                        lakes: warmestLakes,
-                        showDistance: false
-                    )
-
-                    // Off-season: show that this data is from last summer
-                    if Season.isOffSeason && !lastMeasurementYear.isEmpty {
-                        HStack(spacing: 4) {
-                            Image(systemName: "info.circle")
-                                .font(.system(size: 11))
-                            Text("Wassertemperaturen vom Sommer \(lastMeasurementYear)")
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+            if !dataService.availableStates.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        filterChip(label: "Alle Bundesländer", isSelected: selectedState == nil) {
+                            withAnimation(AppTheme.quickSpring) { selectedState = nil }
                         }
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 6)
+                        ForEach(dataService.availableStates, id: \.self) { state in
+                            filterChip(label: state, isSelected: selectedState == state) {
+                                withAnimation(AppTheme.quickSpring) { selectedState = selectedState == state ? nil : state }
+                            }
+                        }
                     }
+                    .padding(.horizontal, 20)
                 }
             }
 
-            // Wave divider before all lakes
-            WaveDivider(color: AppTheme.teal, height: 24)
-                .padding(.horizontal, 16)
-
-            allLakesSection
-
-            // Data source attribution
-            dataAttributionFooter
+            if activeFilterCount > 0 {
+                HStack(spacing: 6) {
+                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                        .font(.system(size: 12))
+                    Text("\(filteredLakes.count) Ergebnisse")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    Spacer()
+                    Button {
+                        withAnimation(AppTheme.quickSpring) {
+                            selectedQuality = nil
+                            selectedTempRange = nil
+                            selectedState = nil
+                        }
+                    } label: {
+                        Text("Filter zurücksetzen")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                    }
+                }
+                .foregroundStyle(AppTheme.textSecondary)
+                .padding(.horizontal, 20)
+            }
         }
-        .padding(.bottom, 40)
+    }
+
+    // MARK: - Search Bar
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(AppTheme.textSecondary)
+
+            TextField("See oder Ort suchen...", text: $searchText)
+                .font(.system(size: 16, weight: .regular, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+                .focused($isSearchFocused)
+                .submitLabel(.search)
+                .onSubmit { isSearchFocused = false }
+
+            if !searchText.isEmpty {
+                Button {
+                    withAnimation(AppTheme.quickSpring) {
+                        searchText = ""
+                        selectedQuality = nil
+                        selectedTempRange = nil
+                        selectedState = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+            }
+        }
+        .padding(14)
+        .background(AppTheme.searchBarBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+        .padding(.horizontal, 20)
     }
 
     // MARK: - Data Attribution
@@ -309,33 +459,6 @@ struct HomeView: View {
             .padding(.horizontal, 20)
             .padding(.top, 8)
         }
-    }
-
-    // MARK: - Search Bar
-
-    private var searchBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(AppTheme.textSecondary)
-
-            TextField("See oder Ort suchen...", text: $searchText)
-                .font(.system(size: 16, weight: .regular, design: .rounded))
-
-            if !searchText.isEmpty {
-                Button {
-                    withAnimation(AppTheme.quickSpring) { searchText = "" }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-            }
-        }
-        .padding(14)
-        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
-        .padding(.horizontal, 20)
     }
 
     // MARK: - Stats Row
@@ -417,7 +540,7 @@ struct HomeView: View {
                         ForEach(0..<4, id: \.self) { _ in
                             RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
                                 .fill(AppTheme.divider)
-                                .frame(width: 200, height: 140)
+                                .frame(width: 200, height: 160)
                                 .shimmer()
                         }
                     }
@@ -449,40 +572,40 @@ struct HomeView: View {
 
     private var allLakesSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Image(systemName: "list.bullet")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppTheme.teal)
-                Text("Alle Gewässer")
-                    .font(AppTheme.sectionTitle)
-                    .foregroundStyle(AppTheme.textPrimary)
-                Spacer()
-
-                Text("\(filteredLakes.count)")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(AppTheme.divider, in: Capsule())
-            }
-            .padding(.horizontal, 20)
-
-            // Filter chips
-            ScrollView(.horizontal, showsIndicators: false) {
+            if !isSearchActive {
                 HStack(spacing: 8) {
-                    filterChip(label: "Alle", isSelected: selectedState == nil) {
-                        selectedState = nil
-                    }
-                    ForEach(dataService.availableStates, id: \.self) { state in
-                        filterChip(label: state, isSelected: selectedState == state) {
-                            selectedState = selectedState == state ? nil : state
-                        }
-                    }
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppTheme.teal)
+                    Text("Alle Gewässer")
+                        .font(AppTheme.sectionTitle)
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Spacer()
+
+                    Text("\(filteredLakes.count)")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(AppTheme.divider, in: Capsule())
                 }
                 .padding(.horizontal, 20)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        filterChip(label: "Alle", isSelected: selectedState == nil) {
+                            selectedState = nil
+                        }
+                        ForEach(dataService.availableStates, id: \.self) { state in
+                            filterChip(label: state, isSelected: selectedState == state) {
+                                selectedState = selectedState == state ? nil : state
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
             }
 
-            // Lake list
             LazyVStack(spacing: 2) {
                 ForEach(filteredLakes.prefix(showAllLakes ? 999 : 20)) { lake in
                     Button { selectedLake = lake } label: {
@@ -523,21 +646,28 @@ struct HomeView: View {
         }
     }
 
-    private func filterChip(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func filterChip(label: String, icon: String? = nil, iconColor: Color? = nil, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(label)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(isSelected ? .white : AppTheme.textPrimary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(
-                    isSelected ? AppTheme.oceanBlue : Color.clear,
-                    in: Capsule()
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(isSelected ? Color.clear : AppTheme.divider, lineWidth: 1.5)
-                )
+            HStack(spacing: 5) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(isSelected ? .white : (iconColor ?? AppTheme.textPrimary))
+                }
+                Text(label)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(isSelected ? .white : AppTheme.textPrimary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                isSelected ? AppTheme.oceanBlue : Color.clear,
+                in: Capsule()
+            )
+            .overlay(
+                Capsule()
+                    .stroke(isSelected ? Color.clear : AppTheme.divider, lineWidth: 1.5)
+            )
         }
         .animation(AppTheme.quickSpring, value: isSelected)
     }
@@ -547,5 +677,6 @@ struct HomeView: View {
     HomeView()
         .environment(DataService.shared)
         .environment(LocationService.shared)
+        .environment(WeatherService.shared)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }

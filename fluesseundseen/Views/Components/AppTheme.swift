@@ -1,9 +1,29 @@
 import SwiftUI
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 // MARK: - App Design System
 
 enum AppTheme {
-    // MARK: - Primary Colors (Google-inspired, vibrant & playful)
+    // MARK: - Adaptive Color Helper
+
+    private static func adaptive(
+        light: (CGFloat, CGFloat, CGFloat),
+        dark: (CGFloat, CGFloat, CGFloat)
+    ) -> Color {
+        #if canImport(UIKit)
+        return Color(UIColor { trait in
+            let c = trait.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: c.0, green: c.1, blue: c.2, alpha: 1)
+        })
+        #else
+        return Color(red: light.0, green: light.1, blue: light.2)
+        #endif
+    }
+
+    // MARK: - Primary Colors (vibrant & playful — same in both modes)
 
     static let oceanBlue = Color(red: 0.10, green: 0.45, blue: 0.91)
     static let skyBlue = Color(red: 0.30, green: 0.65, blue: 1.0)
@@ -15,13 +35,32 @@ enum AppTheme {
     static let lavender = Color(red: 0.56, green: 0.38, blue: 1.0)
     static let warmPink = Color(red: 1.0, green: 0.34, blue: 0.53)
 
-    // MARK: - Neutral Colors
+    // MARK: - Neutral Colors (Adaptive for light / dark mode)
 
-    static let textPrimary = Color(red: 0.11, green: 0.11, blue: 0.12)
-    static let textSecondary = Color(red: 0.44, green: 0.44, blue: 0.47)
-    static let divider = Color(red: 0.90, green: 0.91, blue: 0.92)
-    static let pageBackground = Color(red: 0.965, green: 0.97, blue: 0.98)
-    static let cardBackground = Color.white
+    static let textPrimary = adaptive(
+        light: (0.11, 0.11, 0.12),
+        dark: (0.93, 0.93, 0.95)
+    )
+    static let textSecondary = adaptive(
+        light: (0.44, 0.44, 0.47),
+        dark: (0.62, 0.62, 0.65)
+    )
+    static let divider = adaptive(
+        light: (0.90, 0.91, 0.92),
+        dark: (0.22, 0.22, 0.24)
+    )
+    static let pageBackground = adaptive(
+        light: (0.965, 0.97, 0.98),
+        dark: (0.07, 0.07, 0.09)
+    )
+    static let cardBackground = adaptive(
+        light: (1.0, 1.0, 1.0),
+        dark: (0.14, 0.14, 0.16)
+    )
+    static let searchBarBackground = adaptive(
+        light: (0.94, 0.94, 0.96),
+        dark: (0.18, 0.18, 0.20)
+    )
 
     // MARK: - Gradients
 
@@ -148,6 +187,40 @@ struct BubbleBackground: View {
             withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) {
                 animate.toggle()
             }
+        }
+    }
+}
+
+// MARK: - Appearance Mode
+
+enum AppearanceMode: String, CaseIterable, Identifiable {
+    case system = "system"
+    case light = "light"
+    case dark = "dark"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .system: return "Automatisch"
+        case .light: return "Hell"
+        case .dark: return "Dunkel"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .system: return "circle.lefthalf.filled"
+        case .light: return "sun.max.fill"
+        case .dark: return "moon.fill"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
         }
     }
 }

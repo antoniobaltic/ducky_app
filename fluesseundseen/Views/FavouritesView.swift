@@ -5,6 +5,7 @@ import UserNotifications
 struct FavouritesView: View {
     @Environment(DataService.self) private var dataService
     @Environment(LocationService.self) private var locationService
+    @Environment(WeatherService.self) private var weatherService
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \FavouriteItem.addedAt, order: .reverse) var favourites: [FavouriteItem]
 
@@ -111,49 +112,14 @@ struct FavouritesView: View {
         let duckState = live?.duckState ?? .zufrieden
 
         return NavigationLink(destination: destinationView(for: fav)) {
-            HStack(spacing: 14) {
-                DuckBadge(state: duckState, size: 48)
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(fav.lakeName)
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppTheme.textPrimary)
-
-                    if let municipality = fav.municipalityName {
-                        Text(municipality)
-                            .font(AppTheme.caption)
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-
-                    if let q = quality {
-                        let color = qualityColor(for: q)
-                        HStack(spacing: 5) {
-                            Circle().fill(color).frame(width: 7, height: 7)
-                            Text(qualityLabel(for: q))
-                                .font(AppTheme.smallCaption)
-                                .foregroundStyle(AppTheme.textSecondary)
-                        }
-                    }
-                }
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 8) {
-                    TemperatureBadge(temperature: temp, size: .small, isOutdated: live?.isTemperatureOutdated ?? Season.isOffSeason)
-
-                    Button {
-                        toggleNotifications(for: fav)
-                    } label: {
-                        Image(systemName: fav.notificationsEnabled ? "bell.fill" : "bell")
-                            .font(.system(size: 14))
-                            .foregroundStyle(fav.notificationsEnabled ? AppTheme.sunshine : AppTheme.textSecondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(16)
-            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
-            .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+            FavouriteRowContent(
+                fav: fav,
+                temp: temp,
+                quality: quality,
+                duckState: duckState,
+                live: live,
+                toggleNotifications: { toggleNotifications(for: fav) }
+            )
         }
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -245,9 +211,114 @@ struct FavouritesView: View {
     }
 }
 
+// MARK: - Extracted row content to support weather fetching
+
+private struct FavouriteRowContent: View {
+    let fav: FavouriteItem
+    let temp: Double?
+    let quality: String?
+    let duckState: DuckState
+    let live: BathingWater?
+    let toggleNotifications: () -> Void
+
+    @Environment(WeatherService.self) private var weatherService
+    @State private var weather: LakeWeather?
+
+    var body: some View {
+        HStack(spacing: 14) {
+            DuckBadge(state: duckState, size: 48)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(fav.lakeName)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+
+                if let municipality = fav.municipalityName {
+                    Text(municipality)
+                        .font(AppTheme.caption)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+
+                if let q = quality {
+                    let color = qualityColor(for: q)
+                    HStack(spacing: 5) {
+                        Circle().fill(color).frame(width: 7, height: 7)
+                        Text(qualityLabel(for: q))
+                            .font(AppTheme.smallCaption)
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                }
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 6) {
+                TemperatureBadge(temperature: temp, size: .small, isOutdated: live?.isTemperatureOutdated ?? Season.isOffSeason)
+
+                // Air temperature + weather
+                if let weather {
+                    HStack(spacing: 3) {
+                        Image(systemName: weather.conditionSymbol)
+                            .font(.system(size: 10))
+                            .symbolRenderingMode(.multicolor)
+                        if let airTemp = weather.airTemperature {
+                            Text(String(format: "%.0f°C", airTemp))
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        }
+                    }
+                    .foregroundStyle(AppTheme.textSecondary)
+                }
+
+                Button(action: toggleNotifications) {
+                    Image(systemName: fav.notificationsEnabled ? "bell.fill" : "bell")
+                        .font(.system(size: 14))
+                        .foregroundStyle(fav.notificationsEnabled ? AppTheme.sunshine : AppTheme.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(16)
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+        .task {
+            if let lake = live {
+                weather = await weatherService.fetchWeather(for: lake)
+            }
+        }
+    }
+
+    private func qualityColor(for rating: String) -> Color {
+        let r = rating.uppercased()
+        switch r {
+        case "A": return AppTheme.freshGreen
+        case "G": return AppTheme.teal
+        case "AU": return .orange
+        case "M": return AppTheme.coral
+        default:
+            let low = r.lowercased()
+            if low.contains("ausgezeichnet") { return AppTheme.freshGreen }
+            if low.contains("gut") { return AppTheme.teal }
+            if low.contains("ausreichend") { return .orange }
+            return AppTheme.coral
+        }
+    }
+
+    private func qualityLabel(for rating: String) -> String {
+        let r = rating.uppercased()
+        switch r {
+        case "A": return "Ausgezeichnet"
+        case "G": return "Gut"
+        case "AU": return "Ausreichend"
+        case "M": return "Mangelhaft"
+        default: return rating
+        }
+    }
+}
+
 #Preview {
     FavouritesView()
         .environment(DataService.shared)
         .environment(LocationService.shared)
+        .environment(WeatherService.shared)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }

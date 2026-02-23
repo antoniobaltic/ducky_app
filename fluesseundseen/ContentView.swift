@@ -7,6 +7,7 @@ struct ContentView: View {
     private let weatherService = WeatherService.shared
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @State private var selectedTab = 0
 
     var body: some View {
@@ -23,6 +24,7 @@ struct ContentView: View {
         .environment(dataService)
         .environment(locationService)
         .environment(weatherService)
+        .preferredColorScheme(appearanceMode.colorScheme)
     }
 
     private var mainTabView: some View {

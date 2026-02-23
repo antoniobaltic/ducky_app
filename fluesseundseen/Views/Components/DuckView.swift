@@ -378,25 +378,20 @@ struct DuckView: View {
 
 struct DuckPinView: View {
     let state: DuckState
-    @State private var appear = false
 
     var body: some View {
         ZStack {
             Circle()
                 .fill(state.bodyColor.opacity(0.2))
-                .frame(width: 44, height: 44)
-                .scaleEffect(appear ? 1.0 : 0.5)
+                .frame(width: 38, height: 38)
 
             Circle()
                 .fill(state.bodyColor)
-                .frame(width: 36, height: 36)
-                .shadow(color: state.bodyColor.opacity(0.4), radius: 6, y: 2)
+                .frame(width: 30, height: 30)
+                .shadow(color: state.bodyColor.opacity(0.3), radius: 4, y: 2)
 
-            DuckView(state: state, size: 28)
-                .offset(y: -2)
-        }
-        .onAppear {
-            withAnimation(AppTheme.springAnimation) { appear = true }
+            Text(state.emoji)
+                .font(.system(size: 15))
         }
     }
 }

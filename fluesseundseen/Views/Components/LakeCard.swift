@@ -3,6 +3,8 @@ import SwiftUI
 struct LakeCard: View {
     let lake: BathingWater
     var distanceKm: Double? = nil
+    @Environment(WeatherService.self) private var weatherService
+    @State private var weather: LakeWeather?
     @State private var appear = false
 
     var body: some View {
@@ -51,9 +53,23 @@ struct LakeCard: View {
                     DuckBadge(state: lake.duckState, size: 38)
                 }
 
-                // Bottom info
+                // Temperature + Weather row
                 HStack(spacing: 8) {
                     TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
+
+                    // Air temperature + weather
+                    if let weather {
+                        HStack(spacing: 3) {
+                            Image(systemName: weather.conditionSymbol)
+                                .font(.system(size: 11))
+                                .symbolRenderingMode(.multicolor)
+                            if let airTemp = weather.airTemperature {
+                                Text(String(format: "%.0f°C", airTemp))
+                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            }
+                        }
+                        .foregroundStyle(AppTheme.textSecondary)
+                    }
 
                     Spacer()
 
@@ -81,6 +97,9 @@ struct LakeCard: View {
                 appear = true
             }
         }
+        .task {
+            weather = await weatherService.fetchWeather(for: lake)
+        }
     }
 }
 
@@ -90,6 +109,8 @@ struct LakeListRow: View {
     let lake: BathingWater
     var distanceKm: Double? = nil
     var isFavourite: Bool = false
+    @Environment(WeatherService.self) private var weatherService
+    @State private var weather: LakeWeather?
 
     var body: some View {
         HStack(spacing: 14) {
@@ -144,10 +165,29 @@ struct LakeListRow: View {
 
             Spacer()
 
-            TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
+            // Temperatures + Weather column
+            VStack(alignment: .trailing, spacing: 5) {
+                TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
+
+                if let weather {
+                    HStack(spacing: 3) {
+                        Image(systemName: weather.conditionSymbol)
+                            .font(.system(size: 10))
+                            .symbolRenderingMode(.multicolor)
+                        if let airTemp = weather.airTemperature {
+                            Text(String(format: "%.0f°C", airTemp))
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        }
+                    }
+                    .foregroundStyle(AppTheme.textSecondary)
+                }
+            }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 16)
+        .task {
+            weather = await weatherService.fetchWeather(for: lake)
+        }
     }
 }
 
@@ -170,4 +210,5 @@ struct LakeListRow: View {
         }
     }
     .background(AppTheme.pageBackground)
+    .environment(WeatherService.shared)
 }
