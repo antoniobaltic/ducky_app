@@ -126,27 +126,27 @@ private struct BubbleView: View {
 
     @State private var yOffset: CGFloat = 0
     @State private var opacity: Double = 0
-
-    private var size: CGFloat {
-        CGFloat.random(in: 4...14)
-    }
-
-    private var startX: CGFloat {
-        let segment = containerSize.width / CGFloat(total)
-        return segment * CGFloat(index) + CGFloat.random(in: 0...segment)
-    }
-
-    private var duration: Double {
-        Double.random(in: 4...8)
-    }
+    @State private var stableSize: CGFloat = 0
+    @State private var stableX: CGFloat = 0
+    @State private var stableDuration: Double = 0
+    @State private var stableOpacity: Double = 0
+    @State private var initialized = false
 
     var body: some View {
         Circle()
             .fill(color.opacity(opacity))
-            .frame(width: size, height: size)
-            .position(x: startX, y: containerSize.height + 10 + yOffset)
+            .frame(width: stableSize, height: stableSize)
+            .position(x: stableX, y: containerSize.height + 10 + yOffset)
             .blur(radius: 0.5)
             .onAppear {
+                guard !initialized else { return }
+                initialized = true
+                let segment = containerSize.width / CGFloat(max(total, 1))
+                stableSize = CGFloat.random(in: 4...14)
+                stableX = segment * CGFloat(index) + CGFloat.random(in: 0...segment)
+                stableDuration = Double.random(in: 4...8)
+                stableOpacity = Double.random(in: 0.15...0.4)
+
                 let delay = Double.random(in: 0...3)
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                     startBubble()
@@ -156,14 +156,13 @@ private struct BubbleView: View {
 
     private func startBubble() {
         withAnimation(.easeIn(duration: 0.5)) {
-            opacity = Double.random(in: 0.15...0.4)
+            opacity = stableOpacity
         }
-        withAnimation(.easeInOut(duration: duration).repeatForever(autoreverses: false)) {
+        withAnimation(.easeInOut(duration: stableDuration).repeatForever(autoreverses: false)) {
             yOffset = -(containerSize.height + 30)
         }
-        // Fade out near the top
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration * 0.7) {
-            withAnimation(.easeOut(duration: duration * 0.3)) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + stableDuration * 0.7) {
+            withAnimation(.easeOut(duration: stableDuration * 0.3)) {
                 opacity = 0
             }
         }

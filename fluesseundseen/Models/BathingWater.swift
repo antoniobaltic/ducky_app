@@ -45,6 +45,32 @@ struct BathingWater: Identifiable, Hashable {
         Season.measurementYear(from: measurementDate)
     }
 
+    // MARK: - Current vs Historical Temperature
+
+    /// Returns water temperature only if the data is fresh (current summer season).
+    /// Returns nil for outdated measurements — UI should show "Unbekannt".
+    var currentWaterTemperature: Double? {
+        guard !isTemperatureOutdated else { return nil }
+        return waterTemperature
+    }
+
+    /// True if we have any water temperature data, even if outdated
+    var hasHistoricalTemperature: Bool {
+        waterTemperature != nil
+    }
+
+    // MARK: - Swim Score
+
+    /// Compute the composite swim score using weather data and current water temp
+    func swimScore(weather: LakeWeather?) -> SwimScore {
+        SwimScore.compute(
+            weather: weather,
+            waterTemp: currentWaterTemperature,
+            qualityRating: qualityRating,
+            isClosed: isClosed
+        )
+    }
+
     // MARK: - Computed Properties
 
     var duckState: DuckState {
@@ -83,6 +109,42 @@ struct BathingWater: Identifiable, Hashable {
 
     var qualityLabel: String {
         guard let rating = qualityRating?.uppercased(), !rating.isEmpty else { return "Keine Einstufung" }
+        switch rating {
+        case "A": return "Ausgezeichnet"
+        case "G": return "Gut"
+        case "AU": return "Ausreichend"
+        case "M": return "Mangelhaft"
+        default:
+            let r = rating.lowercased()
+            if r.contains("ausgezeichnet") || r.contains("excellent") { return "Ausgezeichnet" }
+            if r.contains("gut") || r.contains("good") { return "Gut" }
+            if r.contains("ausreichend") || r.contains("sufficient") { return "Ausreichend" }
+            if r.contains("mangelhaft") || r.contains("poor") { return "Mangelhaft" }
+            return rating
+        }
+    }
+
+    // MARK: - Static Quality Helpers (for use with raw rating strings)
+
+    static func qualityColor(for rating: String?) -> Color {
+        guard let rating = rating?.uppercased(), !rating.isEmpty else { return .gray }
+        switch rating {
+        case "A": return AppTheme.freshGreen
+        case "G": return AppTheme.teal
+        case "AU": return .orange
+        case "M": return AppTheme.coral
+        default:
+            let r = rating.lowercased()
+            if r.contains("ausgezeichnet") || r.contains("excellent") { return AppTheme.freshGreen }
+            if r.contains("gut") || r.contains("good") { return AppTheme.teal }
+            if r.contains("ausreichend") || r.contains("sufficient") { return .orange }
+            if r.contains("mangelhaft") || r.contains("poor") { return AppTheme.coral }
+            return .gray
+        }
+    }
+
+    static func qualityLabel(for rating: String?) -> String {
+        guard let rating = rating?.uppercased(), !rating.isEmpty else { return "Keine Einstufung" }
         switch rating {
         case "A": return "Ausgezeichnet"
         case "G": return "Gut"

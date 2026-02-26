@@ -50,41 +50,41 @@ struct LakeCard: View {
 
                     Spacer(minLength: 4)
 
-                    DuckBadge(state: lake.duckState, size: 38)
+                    SwimScoreBadge(score: lake.swimScore(weather: weather), size: .small)
                 }
 
-                // Temperature row: Air first, then Water
-                HStack(spacing: 6) {
+                // Temperature row
+                HStack(spacing: 5) {
                     if let weather, let airTemp = weather.airTemperature {
-                        HStack(spacing: 3) {
+                        HStack(spacing: 2) {
                             Image(systemName: "sun.max.fill")
-                                .font(.system(size: 10))
+                                .font(.system(size: 9))
                                 .foregroundStyle(AppTheme.coral)
-                            Text(String(format: "%.0f°C", airTemp))
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                            Text(String(format: "%.0f°", airTemp))
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
                                 .foregroundStyle(AppTheme.textPrimary)
                         }
-
-                        Text("·")
-                            .font(.system(size: 10))
-                            .foregroundStyle(AppTheme.textSecondary)
                     }
 
-                    HStack(spacing: 3) {
-                        Image(systemName: "drop.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(AppTheme.skyBlue)
-                        TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
+                    if let waterTemp = lake.currentWaterTemperature {
+                        HStack(spacing: 2) {
+                            Image(systemName: "drop.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(AppTheme.skyBlue)
+                            Text(String(format: "%.0f°", waterTemp))
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(AppTheme.textPrimary)
+                        }
                     }
 
-                    Spacer()
+                    Spacer(minLength: 2)
 
                     if let dist = distanceKm {
-                        HStack(spacing: 3) {
+                        HStack(spacing: 2) {
                             Image(systemName: "location.fill")
-                                .font(.system(size: 9))
+                                .font(.system(size: 8))
                             Text(String(format: "%.0f km", dist))
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
                         }
                         .foregroundStyle(AppTheme.textSecondary)
                     }
@@ -120,7 +120,7 @@ struct LakeListRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            DuckBadge(state: lake.duckState, size: 44)
+            SwimScoreBadge(score: lake.swimScore(weather: weather), size: .medium)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -142,11 +142,12 @@ struct LakeListRow: View {
                     }
                 }
 
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     if let municipality = lake.municipality {
                         Text(municipality)
                             .font(AppTheme.caption)
                             .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(1)
                     }
                     if let state = lake.state {
                         Text("·")
@@ -154,6 +155,8 @@ struct LakeListRow: View {
                         Text(state)
                             .font(AppTheme.caption)
                             .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .layoutPriority(-1)
                     }
                     if let dist = distanceKm {
                         Text("·")
@@ -165,6 +168,7 @@ struct LakeListRow: View {
                                 .font(AppTheme.smallCaption)
                         }
                         .foregroundStyle(.tertiary)
+                        .fixedSize()
                     }
                 }
             }
@@ -184,11 +188,19 @@ struct LakeListRow: View {
                     }
                 }
 
-                HStack(spacing: 3) {
-                    Image(systemName: "drop.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(AppTheme.skyBlue)
-                    TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
+                if let waterTemp = lake.currentWaterTemperature {
+                    HStack(spacing: 3) {
+                        Image(systemName: "drop.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(AppTheme.skyBlue)
+                        Text(String(format: "%.0f°C", waterTemp))
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppTheme.textPrimary)
+                    }
+                } else {
+                    Text("Wasser: –")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
             }
         }

@@ -5,6 +5,10 @@ struct ShareCardView: View {
     let weather: LakeWeather?
     @Environment(\.dismiss) private var dismiss
 
+    private var score: SwimScore {
+        lake.swimScore(weather: weather)
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -46,21 +50,22 @@ struct ShareCardView: View {
                 }
                 .foregroundStyle(.white.opacity(0.9))
                 Spacer()
-                Text(lake.duckState.emoji)
+                Text(score.level.emoji)
                     .font(.system(size: 16))
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
-            .background(lake.duckState.accentColor)
+            .background(AppTheme.scoreColor(for: score.level))
 
             // Content
             VStack(spacing: 20) {
                 VStack(spacing: 8) {
-                    DuckView(state: lake.duckState, size: 100)
+                    SwimScoreBadge(score: score, size: .hero)
 
-                    Text("\u{201E}\(lake.duckState.line)\u{201C}")
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                    Text("\u{201E}\(duckQuote)\u{201C}")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
+                        .italic()
                         .multilineTextAlignment(.center)
                 }
 
@@ -82,9 +87,9 @@ struct ShareCardView: View {
                 // Stats
                 HStack(spacing: 0) {
                     statCell(
-                        value: lake.temperatureDisplay,
-                        label: "Wassertemp.",
-                        color: lake.hasTemperature ? lake.temperatureColor : .gray
+                        value: String(format: "%.1f/10", score.total),
+                        label: score.scoreLabel,
+                        color: AppTheme.scoreColor(for: score.level)
                     )
                     Divider().frame(height: 36)
                     if let airTemp = weather?.airTemperature {
@@ -92,6 +97,14 @@ struct ShareCardView: View {
                             value: String(format: "%.0f°C", airTemp),
                             label: "Lufttemp.",
                             color: AppTheme.coral
+                        )
+                        Divider().frame(height: 36)
+                    }
+                    if let waterTemp = lake.currentWaterTemperature {
+                        statCell(
+                            value: String(format: "%.1f°C", waterTemp),
+                            label: "Wasser",
+                            color: AppTheme.oceanBlue
                         )
                         Divider().frame(height: 36)
                     }
@@ -140,29 +153,26 @@ struct ShareCardView: View {
         .padding(.vertical, 6)
     }
 
-    private var verdictSentence: String {
-        // Outdated: don't present stale data as current conditions
-        if lake.isTemperatureOutdated {
-            if let temp = lake.waterTemperature {
-                return "Letzte Messung: \(String(format: "%.1f", temp))°C. Neue Daten ab Juni."
+    private var duckQuote: String {
+        if lake.isTemperatureOutdated && lake.waterTemperature != nil {
+            switch Season.current {
+            case .winter: return "Winterpause — bis zum Sommer!"
+            case .spring: return "Bald geht's wieder los!"
+            case .autumn: return "Saison vorbei — bis nächstes Jahr!"
+            case .summer: return lake.duckState.line
             }
-            return "Daten vom letzten Sommer. Neue Messungen ab Juni."
         }
+        return lake.duckState.line
+    }
 
-        guard let temp = lake.waterTemperature else { return "Temperaturdaten momentan nicht verfügbar." }
-        let tempStr = String(format: "%.1f", temp)
-        var parts: [String] = ["\(tempStr)°C Wasser"]
-        if let air = weather?.airTemperature {
-            parts.append(String(format: "%.0f°C Luft", air))
-        }
-        let stats = parts.joined(separator: " · ")
-
-        switch lake.duckState {
-        case .begeistert: return "\(stats) — Perfekte Bedingungen!"
-        case .zufrieden:  return "\(stats) — Angenehm zum Baden."
-        case .zoegernd:   return "\(stats) — Nur für Mutige."
-        case .frierend:   return "\(stats) — Lieber warten."
-        case .warnend:    return "Wasserqualität aktuell mangelhaft."
+    private var verdictSentence: String {
+        let scoreStr = String(format: "%.1f/10", score.total)
+        switch score.level {
+        case .perfekt:  return "\(score.scoreLabel) \(scoreStr) — Perfekte Bedingungen!"
+        case .gut:      return "\(score.scoreLabel) \(scoreStr) — Gute Bedingungen zum Baden."
+        case .mittel:   return "\(score.scoreLabel) \(scoreStr) — Durchwachsen."
+        case .schlecht: return "\(score.scoreLabel) \(scoreStr) — Eher nicht ideal."
+        case .warnung:  return "\(score.scoreLabel) \(scoreStr) — Lieber nicht ins Wasser."
         }
     }
 
@@ -182,8 +192,8 @@ struct ShareCardView: View {
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(lake.duckState.accentColor, in: RoundedRectangle(cornerRadius: AppTheme.buttonRadius, style: .continuous))
-            .shadow(color: lake.duckState.accentColor.opacity(0.3), radius: 10, y: 5)
+            .background(AppTheme.scoreColor(for: score.level), in: RoundedRectangle(cornerRadius: AppTheme.buttonRadius, style: .continuous))
+            .shadow(color: AppTheme.scoreColor(for: score.level).opacity(0.3), radius: 10, y: 5)
         }
     }
 

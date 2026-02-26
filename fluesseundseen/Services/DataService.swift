@@ -4,30 +4,41 @@ import Observation
 
 @Observable
 final class DataService {
-    var lakes: [BathingWater] = []
+    var lakes: [BathingWater] = [] {
+        didSet { _cachedAvailableStates = nil }
+    }
     var isLoading = false
     var error: String?
     var lastFetch: Date?
 
-    /// All unique states from the loaded data
+    /// Cached result of availableStates — invalidated whenever `lakes` changes.
+    @ObservationIgnored
+    private var _cachedAvailableStates: [String]? = nil
+
+    /// All unique states from the loaded data (O(1) on repeat access).
     var availableStates: [String] {
-        Array(Set(lakes.compactMap(\.state))).sorted()
+        if let cached = _cachedAvailableStates { return cached }
+        let result = Array(Set(lakes.compactMap(\.state))).sorted()
+        _cachedAvailableStates = result
+        return result
     }
 
-    private let cacheKey = "cached_badegewaesser"
-    private let cacheTimestampKey = "cached_badegewaesser_timestamp"
     private let cacheExpirySeconds: TimeInterval = 24 * 60 * 60
     private let apiURL = URL(string: "https://www.ages.at/typo3temp/badegewaesser_db.json")!
 
     static let shared = DataService()
 
-    private init() {}
+    private init() {
+        // Clean up legacy UserDefaults cache entries to free space
+        UserDefaults.standard.removeObject(forKey: "cached_badegewaesser")
+        UserDefaults.standard.removeObject(forKey: "cached_badegewaesser_timestamp")
+    }
 
     // MARK: - Public
 
     func loadData() async {
-        if let cached = loadFromCache() {
-            lakes = cached
+        if let cached = await loadFromCache() {
+            await MainActor.run { lakes = cached }
             return
         }
         await fetchFromNetwork()
@@ -46,16 +57,17 @@ final class DataService {
             var request = URLRequest(url: apiURL)
             request.cachePolicy = .reloadIgnoringLocalCacheData
             let (data, _) = try await URLSession.shared.data(for: request)
-            let parsed = try parse(data: data)
+            // Parse off the main thread
+            let parsed = try await Self.parseAsync(data: data)
 
             await MainActor.run {
                 lakes = parsed
                 lastFetch = Date()
                 isLoading = false
             }
-            saveToCache(data: data)
+            await saveToCacheAsync(data: data)
         } catch {
-            if let cached = loadFromCache(ignoreExpiry: true) {
+            if let cached = await loadFromCache(ignoreExpiry: true) {
                 await MainActor.run {
                     lakes = cached
                     isLoading = false
@@ -71,9 +83,17 @@ final class DataService {
         }
     }
 
-    // MARK: - Parsing (AGES nested format)
+    // MARK: - Async Parsing (always off MainActor via Task.detached)
 
-    private func parse(data: Data) throws -> [BathingWater] {
+    private static func parseAsync(data: Data) async throws -> [BathingWater] {
+        try await Task.detached(priority: .userInitiated) {
+            try Self.parse(data: data)
+        }.value
+    }
+
+    // MARK: - Parsing (AGES nested format) — static so it's safe in Task.detached
+
+    private static func parse(data: Data) throws -> [BathingWater] {
         guard let json = try JSONSerialization.jsonObject(with: data) as? Any else {
             throw DataError.invalidFormat
         }
@@ -115,23 +135,45 @@ final class DataService {
         return allEntries
     }
 
-    // MARK: - Cache
+    // MARK: - File-based Cache (avoids storing large JSON in UserDefaults)
 
-    private func saveToCache(data: Data) {
-        UserDefaults.standard.set(data, forKey: cacheKey)
-        UserDefaults.standard.set(Date().timeIntervalSinceReferenceDate, forKey: cacheTimestampKey)
+    private func saveToCacheAsync(data: Data) async {
+        let dataURL = Self.cacheDataURL
+        let tsURL = Self.cacheTimestampURL
+        let timestamp = "\(Date().timeIntervalSinceReferenceDate)"
+        await Task.detached(priority: .background) {
+            try? data.write(to: dataURL, options: .atomic)
+            try? timestamp.data(using: .utf8)?.write(to: tsURL, options: .atomic)
+        }.value
     }
 
-    private func loadFromCache(ignoreExpiry: Bool = false) -> [BathingWater]? {
-        guard let data = UserDefaults.standard.data(forKey: cacheKey) else { return nil }
-
+    private func loadFromCache(ignoreExpiry: Bool = false) async -> [BathingWater]? {
         if !ignoreExpiry {
-            let timestamp = UserDefaults.standard.double(forKey: cacheTimestampKey)
+            guard let tsData = try? Data(contentsOf: Self.cacheTimestampURL),
+                  let tsStr = String(data: tsData, encoding: .utf8),
+                  let timestamp = Double(tsStr)
+            else { return nil }
             let age = Date().timeIntervalSinceReferenceDate - timestamp
             guard age < cacheExpirySeconds else { return nil }
         }
 
-        return try? parse(data: data)
+        let dataURL = Self.cacheDataURL
+        guard (try? dataURL.checkResourceIsReachable()) == true else { return nil }
+
+        return try? await Task.detached(priority: .userInitiated) {
+            let data = try Data(contentsOf: dataURL)
+            return try Self.parse(data: data)
+        }.value
+    }
+
+    private static var cacheDataURL: URL {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return dir.appendingPathComponent("badegewaesser_cache.json")
+    }
+
+    private static var cacheTimestampURL: URL {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return dir.appendingPathComponent("badegewaesser_cache_ts.txt")
     }
 
     enum DataError: Error {
@@ -152,6 +194,14 @@ extension DataService {
         lakes
             .filter { $0.waterTemperature != nil }
             .sorted { ($0.waterTemperature ?? 0) > ($1.waterTemperature ?? 0) }
+    }
+
+    func sortedByScore(weatherService: WeatherService) -> [BathingWater] {
+        lakes.sorted { a, b in
+            let scoreA = a.swimScore(weather: weatherService.weatherCache[a.id]).total
+            let scoreB = b.swimScore(weather: weatherService.weatherCache[b.id]).total
+            return scoreA > scoreB
+        }
     }
 
     func filtered(by state: String?) -> [BathingWater] {

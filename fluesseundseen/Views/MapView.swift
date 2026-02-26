@@ -35,7 +35,7 @@ struct MapView: View {
                 Map(position: $cameraPosition, selection: $selectedLake) {
                     ForEach(visibleLakes) { lake in
                         Annotation(lake.name, coordinate: lake.coordinate, anchor: .bottom) {
-                            DuckPinView(state: lake.duckState)
+                            ScorePinView(score: lake.swimScore(weather: weatherService.weatherCache[lake.id]))
                                 .scaleEffect(selectedLake?.id == lake.id ? 1.3 : 1.0)
                                 .animation(AppTheme.quickSpring, value: selectedLake?.id)
                         }
@@ -104,7 +104,7 @@ struct MapView: View {
                 .padding(.top, 6)
 
             HStack(spacing: 14) {
-                DuckBadge(state: lake.duckState, size: 56)
+                SwimScoreBadge(score: lake.swimScore(weather: selectedWeather), size: .large)
                     .padding(.leading, 4)
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -137,11 +137,15 @@ struct MapView: View {
                             }
                         }
 
-                        HStack(spacing: 3) {
-                            Image(systemName: "drop.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(AppTheme.skyBlue)
-                            TemperatureBadge(temperature: lake.waterTemperature, size: .small, isOutdated: lake.isTemperatureOutdated)
+                        if let waterTemp = lake.currentWaterTemperature {
+                            HStack(spacing: 3) {
+                                Image(systemName: "drop.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(AppTheme.skyBlue)
+                                Text(String(format: "%.0f°C", waterTemp))
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                            }
                         }
 
                         QualityBadge(qualityLabel: lake.qualityLabel, qualityColor: lake.qualityColor)

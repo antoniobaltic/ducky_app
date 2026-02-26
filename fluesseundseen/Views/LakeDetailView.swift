@@ -21,6 +21,22 @@ struct LakeDetailView: View {
         favourites.contains { $0.lakeID == lake.id }
     }
 
+    private var currentScore: SwimScore {
+        lake.swimScore(weather: weather)
+    }
+
+    private var heroQuote: String {
+        if lake.isTemperatureOutdated && lake.waterTemperature != nil {
+            switch Season.current {
+            case .winter: return "Winterpause — Ducky wartet auf den Sommer!"
+            case .spring: return "Bald geht's wieder los!"
+            case .autumn: return "Saison vorbei — bis nächsten Sommer!"
+            case .summer: return currentScore.duckState.line
+            }
+        }
+        return currentScore.duckState.line
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -59,12 +75,12 @@ struct LakeDetailView: View {
     private var heroSection: some View {
         ZStack(alignment: .bottom) {
             ZStack {
-                lake.duckState.backgroundGradient
-                    .frame(height: 370)
+                currentScore.duckState.backgroundGradient
+                    .frame(height: 400)
 
                 // Floating bubbles
                 FloatingBubblesView(count: 5, color: .white.opacity(0.25))
-                    .frame(height: 370)
+                    .frame(height: 400)
             }
 
             // Wave at bottom of hero
@@ -75,15 +91,21 @@ struct LakeDetailView: View {
             VStack(spacing: 0) {
                 Spacer(minLength: 80)
 
-                // Ducky left + quote right
-                HStack(alignment: .center, spacing: 14) {
-                    DuckView(state: lake.duckState, size: 90)
+                // Score badge as centerpiece
+                SwimScoreBadge(score: currentScore, size: .hero)
+                    .scaleEffect(appear ? 1 : 0.8)
+                    .opacity(appear ? 1 : 0)
+                    .padding(.bottom, 8)
+
+                // Ducky + quote
+                HStack(alignment: .center, spacing: 10) {
+                    DuckView(state: currentScore.duckState, size: 50)
                         .scaleEffect(appear ? 1 : 0.7)
                         .opacity(appear ? 1 : 0)
 
-                    Text("\u{201E}\(lake.duckState.line)\u{201C}")
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.textPrimary)
+                    Text("\u{201E}\(heroQuote)\u{201C}")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary.opacity(0.8))
                         .italic()
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -157,33 +179,29 @@ struct LakeDetailView: View {
                         Image(systemName: "drop.fill")
                             .font(.system(size: 20))
                             .foregroundStyle(AppTheme.oceanBlue)
-                        if let temp = lake.waterTemperature {
+                        if let temp = lake.currentWaterTemperature {
                             HStack(alignment: .top, spacing: 2) {
                                 Text(String(format: "%.1f", temp))
                                     .font(.system(size: 36, weight: .heavy, design: .rounded))
-                                    .foregroundStyle(lake.isTemperatureOutdated ? AppTheme.oceanBlue.opacity(0.5) : AppTheme.oceanBlue)
+                                    .foregroundStyle(AppTheme.oceanBlue)
                                 Text("°C")
                                     .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(AppTheme.oceanBlue.opacity(lake.isTemperatureOutdated ? 0.35 : 0.7))
+                                    .foregroundStyle(AppTheme.oceanBlue.opacity(0.7))
                                     .padding(.top, 5)
                             }
                         } else {
-                            Image(systemName: "thermometer.medium.slash")
-                                .font(.system(size: 24, weight: .medium))
-                                .foregroundStyle(.secondary)
+                            Text("Unbekannt")
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundStyle(AppTheme.textSecondary)
                                 .padding(.vertical, 8)
                         }
                         Text("Wasser")
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
                             .foregroundStyle(AppTheme.textSecondary)
-                        if lake.isTemperatureOutdated {
-                            HStack(spacing: 3) {
-                                Image(systemName: "clock.arrow.circlepath")
-                                    .font(.system(size: 10))
-                                Text("Stand: \(lake.measurementDate ?? "unbekannt")")
-                                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                            }
-                            .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                        if lake.currentWaterTemperature == nil {
+                            Text("Messungen: Juni – August")
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -200,6 +218,9 @@ struct LakeDetailView: View {
 
     private var contentSection: some View {
         VStack(spacing: 16) {
+            // Score breakdown
+            ScoreBreakdownView(score: currentScore)
+
             // Off-season info banner
             if Season.isOffSeason {
                 seasonInfoBanner
@@ -300,6 +321,26 @@ struct LakeDetailView: View {
                         value: String(format: "%.0f°C", feels),
                         label: "Gefühlt",
                         color: AppTheme.lavender
+                    )
+                }
+            }
+
+            // Wind & precipitation row
+            HStack(spacing: 0) {
+                if let wind = weather.windSpeed {
+                    weatherStat(
+                        icon: "wind",
+                        value: String(format: "%.0f km/h", wind),
+                        label: "Wind",
+                        color: AppTheme.skyBlue
+                    )
+                }
+                if let precip = weather.precipitationProbability {
+                    weatherStat(
+                        icon: "cloud.rain.fill",
+                        value: "\(precip)%",
+                        label: "Niederschlag",
+                        color: AppTheme.oceanBlue
                     )
                 }
             }

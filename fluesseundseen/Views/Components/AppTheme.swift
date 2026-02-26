@@ -106,6 +106,48 @@ enum AppTheme {
     static let badgeRadius: CGFloat = 12
     static let buttonRadius: CGFloat = 16
 
+    // MARK: - Score Colors
+
+    static let scorePerfekt = adaptive(
+        light: (0.13, 0.75, 0.39),   // vibrant green
+        dark: (0.20, 0.82, 0.48)
+    )
+    static let scoreGut = adaptive(
+        light: (0.0, 0.70, 0.62),    // teal
+        dark: (0.10, 0.78, 0.70)
+    )
+    static let scoreMittel = adaptive(
+        light: (0.95, 0.75, 0.10),   // amber
+        dark: (1.0, 0.82, 0.20)
+    )
+    static let scoreSchlecht = adaptive(
+        light: (0.95, 0.50, 0.15),   // orange
+        dark: (1.0, 0.58, 0.22)
+    )
+    static let scoreWarnung = adaptive(
+        light: (0.92, 0.28, 0.20),   // red
+        dark: (1.0, 0.38, 0.30)
+    )
+
+    static func scoreColor(for level: SwimScore.Level) -> Color {
+        switch level {
+        case .perfekt:  return scorePerfekt
+        case .gut:      return scoreGut
+        case .mittel:   return scoreMittel
+        case .schlecht: return scoreSchlecht
+        case .warnung:  return scoreWarnung
+        }
+    }
+
+    static func scoreGradient(for level: SwimScore.Level) -> LinearGradient {
+        let base = scoreColor(for: level)
+        return LinearGradient(
+            colors: [base.opacity(0.8), base],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     // MARK: - Seasonal Colors
 
     static let winterBlue = Color(red: 0.72, green: 0.84, blue: 0.96)
@@ -169,21 +211,42 @@ extension View {
 struct BubbleBackground: View {
     let color: Color
     @State private var animate = false
+    @State private var bubbles: [BubbleParams] = []
+
+    struct BubbleParams: Identifiable {
+        let id: Int
+        let opacity: Double
+        let size: CGFloat
+        let x: CGFloat
+        let y1: CGFloat
+        let y2: CGFloat
+        let blur: CGFloat
+    }
 
     var body: some View {
         ZStack {
-            ForEach(0..<6, id: \.self) { i in
+            ForEach(bubbles) { b in
                 Circle()
-                    .fill(color.opacity(Double.random(in: 0.03...0.08)))
-                    .frame(width: CGFloat.random(in: 40...120))
-                    .offset(
-                        x: CGFloat.random(in: -150...150),
-                        y: animate ? CGFloat.random(in: -200...200) : CGFloat.random(in: -200...200)
-                    )
-                    .blur(radius: CGFloat.random(in: 10...30))
+                    .fill(color.opacity(b.opacity))
+                    .frame(width: b.size)
+                    .offset(x: b.x, y: animate ? b.y2 : b.y1)
+                    .blur(radius: b.blur)
             }
         }
         .onAppear {
+            if bubbles.isEmpty {
+                bubbles = (0..<6).map { i in
+                    BubbleParams(
+                        id: i,
+                        opacity: .random(in: 0.03...0.08),
+                        size: .random(in: 40...120),
+                        x: .random(in: -150...150),
+                        y1: .random(in: -200...200),
+                        y2: .random(in: -200...200),
+                        blur: .random(in: 10...30)
+                    )
+                }
+            }
             withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) {
                 animate.toggle()
             }

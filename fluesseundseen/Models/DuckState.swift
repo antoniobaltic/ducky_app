@@ -19,11 +19,11 @@ enum DuckState: String, Equatable, CaseIterable {
 
     var line: String {
         switch self {
-        case .begeistert: return "Spring rein! Das Wasser ist perfekt!"
-        case .zufrieden:  return "Angenehm! Ducky ist zufrieden."
-        case .zoegernd:   return "Hmm... nur für Mutige!"
-        case .frierend:   return "Brrr! Ducky friert!"
-        case .warnend:    return "Vorsicht! Besser nicht rein."
+        case .begeistert: return "Perfekter Badetag! Ab ins Wasser!"
+        case .zufrieden:  return "Gute Bedingungen — Ducky freut sich!"
+        case .zoegernd:   return "Geht so — vielleicht nur kurz rein?"
+        case .frierend:   return "Eher ein Tag für Kakao am Ufer."
+        case .warnend:    return "Lieber nicht ins Wasser heute!"
         }
     }
 

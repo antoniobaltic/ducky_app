@@ -11,6 +11,7 @@ struct DuckView: View {
     @State private var wingAngle: Double = 0
     @State private var blushOpacity: Double = 0
     @State private var sparkleOpacity: Double = 0
+    @State private var blinkTask: Task<Void, Never>?
 
     private var s: CGFloat { size / 120 }
 
@@ -25,6 +26,7 @@ struct DuckView: View {
         .frame(width: size, height: size)
         .onAppear { startAnimations() }
         .onChange(of: state) { startAnimations() }
+        .onDisappear { blinkTask?.cancel() }
     }
 
     // MARK: - Water ripple beneath
@@ -363,12 +365,15 @@ struct DuckView: View {
     }
 
     private func scheduleBlink() {
-        let delay = Double.random(in: 2...5)
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            withAnimation(.easeInOut(duration: 0.06)) { blinkScale = 0.05 }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        blinkTask?.cancel()
+        blinkTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(Double.random(in: 2...5)))
+                guard !Task.isCancelled else { break }
+                withAnimation(.easeInOut(duration: 0.06)) { blinkScale = 0.05 }
+                try? await Task.sleep(for: .milliseconds(100))
+                guard !Task.isCancelled else { break }
                 withAnimation(.easeInOut(duration: 0.06)) { blinkScale = 1 }
-                scheduleBlink()
             }
         }
     }

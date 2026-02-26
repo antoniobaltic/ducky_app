@@ -10,7 +10,6 @@ struct HomeView: View {
     @Query var favourites: [FavouriteItem]
     @State private var selectedLake: BathingWater?
     @State private var searchText = ""
-    @State private var showAllLakes = false
     @State private var selectedState: String?
     @State private var heroAppear = false
     @State private var showSettings = false
@@ -18,176 +17,186 @@ struct HomeView: View {
 
     // Filters
     @State private var selectedQuality: String?
-    @State private var selectedTempRange: TempRange?
+    @State private var selectedScoreFilter: ScoreFilter?
 
     // Sort
-    @State private var sortOption: SortOption = .nearest
+    @State private var sortOption: SortOption = .bestScore
 
     // Recent lakes
     @State private var recentLakes: [RecentLake] = []
 
+    // MARK: - Display State
+    // These are derived values computed off the render path (via updateDisplayLakes),
+    // so that weatherCache updates don't trigger expensive recomputation every frame.
+    @State private var displayLakes: [BathingWater] = []
+    @State private var displayTotalCount: Int = 0
+    @State private var cachedGoodScoreCount: Int = 0
+    @State private var cachedAverageScore: SwimScore? = nil
+    @State private var visibleCount: Int = 20        // progressive pagination
+    @State private var updateTask: Task<Void, Never>?
+
+    // MARK: - Sort / Filter Enums
+
     enum SortOption: String, CaseIterable {
-        case nearest
-        case warmest
-        case coldest
-        case alphabetical
+        case bestScore, nearest, warmest, coldest, alphabetical
 
         var label: String {
             switch self {
-            case .nearest: return "Nächste"
-            case .warmest: return "Wärmste"
-            case .coldest: return "Kälteste"
+            case .bestScore:    return "Bester Score"
+            case .nearest:      return "Nächste"
+            case .warmest:      return "Wärmstes Wasser"
+            case .coldest:      return "Kältestes Wasser"
             case .alphabetical: return "A–Z"
             }
         }
 
         var icon: String {
             switch self {
-            case .nearest: return "location.fill"
-            case .warmest: return "flame.fill"
-            case .coldest: return "snowflake"
+            case .bestScore:    return "star.fill"
+            case .nearest:      return "location.fill"
+            case .warmest:      return "flame.fill"
+            case .coldest:      return "snowflake"
             case .alphabetical: return "textformat.abc"
             }
         }
     }
 
-    enum TempRange: String, CaseIterable {
-        case warm
-        case mild
+    enum ScoreFilter: String, CaseIterable {
+        case perfekt, gut
 
-        var label: String {
-            switch self {
-            case .warm: return "≥ 20°C"
-            case .mild: return "14–20°C"
-            }
-        }
-
-        var icon: String {
-            switch self {
-            case .warm: return "flame.fill"
-            case .mild: return "thermometer.medium"
-            }
-        }
-
-        var color: Color {
-            switch self {
-            case .warm: return AppTheme.coral
-            case .mild: return AppTheme.skyBlue
-            }
-        }
+        var label: String { self == .perfekt ? "Perfekt" : "Gut+" }
+        var icon: String  { self == .perfekt ? "star.fill" : "hand.thumbsup.fill" }
+        var color: Color  { self == .perfekt ? AppTheme.scorePerfekt : AppTheme.scoreGut }
+        var minScore: Double { self == .perfekt ? 8.0 : 6.0 }
     }
+
+    // MARK: - Inexpensive Computed Properties (no weatherCache access)
 
     private var nearbyLakes: [BathingWater] {
-        Array(dataService.sortedByDistance(from: locationService.userLocation).prefix(20))
-    }
-
-    private var filteredLakes: [BathingWater] {
-        var lakes = dataService.search(searchText)
-        if let state = selectedState {
-            lakes = lakes.filter { $0.state == state }
-        }
-        if let quality = selectedQuality {
-            lakes = lakes.filter { $0.qualityRating?.uppercased() == quality }
-        }
-        if let range = selectedTempRange {
-            switch range {
-            case .warm:
-                lakes = lakes.filter { ($0.waterTemperature ?? 0) >= 20 }
-            case .mild:
-                lakes = lakes.filter {
-                    guard let t = $0.waterTemperature else { return false }
-                    return t >= 14 && t < 20
-                }
-            }
-        }
-        switch sortOption {
-        case .nearest:
-            if let loc = locationService.userLocation {
-                lakes.sort { $0.distance(from: loc) < $1.distance(from: loc) }
-            }
-        case .warmest:
-            lakes.sort { ($0.waterTemperature ?? -999) > ($1.waterTemperature ?? -999) }
-        case .coldest:
-            lakes.sort { ($0.waterTemperature ?? 999) < ($1.waterTemperature ?? 999) }
-        case .alphabetical:
-            lakes.sort { $0.name.localizedCompare($1.name) == .orderedAscending }
-        }
-        return lakes
+        guard let loc = locationService.userLocation else { return [] }
+        // Pre-compute distances once, sort once — avoids CLLocation allocation per comparison
+        return dataService.lakes
+            .map { ($0, $0.distance(from: loc)) }
+            .sorted { $0.1 < $1.1 }
+            .prefix(20)
+            .map { $0.0 }
     }
 
     private var isSearchActive: Bool {
-        !searchText.isEmpty || selectedQuality != nil || selectedTempRange != nil
+        !searchText.isEmpty || selectedQuality != nil || selectedScoreFilter != nil
     }
 
     private var activeFilterCount: Int {
-        var count = 0
-        if selectedQuality != nil { count += 1 }
-        if selectedTempRange != nil { count += 1 }
-        if selectedState != nil { count += 1 }
-        return count
-    }
-
-    // MARK: - Contextual hero data
-
-    private var warmLakeCount: Int {
-        dataService.lakes.filter { ($0.waterTemperature ?? 0) >= 20 }.count
-    }
-
-    private var lakesWithTemperature: Int {
-        dataService.lakes.filter { $0.waterTemperature != nil }.count
+        (selectedQuality != nil ? 1 : 0) +
+        (selectedScoreFilter != nil ? 1 : 0) +
+        (selectedState != nil ? 1 : 0)
     }
 
     private var season: Season { .current }
 
     private var heroState: DuckState {
         if dataService.isLoading { return .zufrieden }
+        if let avg = cachedAverageScore { return avg.duckState }
         if Season.isOffSeason { return season.duckState }
-        if warmLakeCount > 10 { return .begeistert }
-        if warmLakeCount > 0 { return .zufrieden }
-        if lakesWithTemperature > 0 {
-            let anyWarm = dataService.lakes.contains { ($0.waterTemperature ?? 0) >= 14 }
-            return anyWarm ? .zoegernd : .frierend
-        }
         return .zufrieden
     }
 
     private var heroGreeting: String {
         if Season.isOffSeason { return season.heroTitle }
         let hour = Calendar.current.component(.hour, from: Date())
-        if hour < 6 { return "Gute Nacht!" }
+        if hour < 6  { return "Gute Nacht!" }
         if hour < 12 { return "Guten Morgen!" }
         if hour < 18 { return "Hallo!" }
         return "Guten Abend!"
     }
 
     private var heroMessage: String {
-        if dataService.isLoading {
-            return "Ducky checkt die Wassertemperaturen..."
-        }
+        if dataService.isLoading { return "Ducky checkt die Bedingungen..." }
         if Season.isOffSeason { return season.heroMessage }
 
         let total = dataService.lakes.count
-        if total == 0 {
-            return "Entdecke Österreichs schönste Badegewässer!"
-        }
-        if lakesWithTemperature == 0 {
-            return "\(total) Gewässer geladen. Temperaturdaten werden aktualisiert."
-        }
-        if warmLakeCount > 10 {
-            if let warmest = dataService.sortedByTemperature().first, let temp = warmest.waterTemperature {
-                return "Super Badewetter! \(warmLakeCount) Seen über 20°C. \(warmest.name) führt mit \(String(format: "%.0f", temp))°C!"
+        if total == 0 { return "Entdecke Österreichs schönste Badegewässer!" }
+
+        if let avg = cachedAverageScore {
+            let good = cachedGoodScoreCount
+            switch avg.level {
+            case .perfekt:  return "Perfekter Badetag! \(good) Seen mit top Bedingungen."
+            case .gut:      return "Gute Bedingungen heute! \(good) Seen laden zum Baden ein."
+            case .mittel:   return "Durchwachsen — \(good) Seen haben noch gute Bedingungen."
+            case .schlecht: return "Nicht ideal heute. Vielleicht morgen besser?"
+            case .warnung:  return "Heute eher ein Tag für drinnen."
             }
-            return "Super Badewetter! \(warmLakeCount) Seen haben über 20°C!"
         }
-        if warmLakeCount > 0 {
-            return "\(warmLakeCount) von \(lakesWithTemperature) Seen sind warm genug zum Baden."
-        }
-        let mildCount = dataService.lakes.filter { ($0.waterTemperature ?? 0) >= 14 }.count
-        if mildCount > 0 {
-            return "Die Seen sind noch frisch — \(mildCount) haben über 14°C. Nur für Mutige!"
-        }
-        return "Brr! Die Seen sind noch kalt. Ducky empfiehlt: Warten."
+
+        return "\(total) Gewässer geladen. Wetterdaten werden aktualisiert."
     }
+
+    // MARK: - Display Update (debounced, off-render-path)
+
+    /// Recompute displayLakes, hero stats, and pagination.
+    /// `debounce: true` waits 200 ms — coalesces rapid weather cache ticks.
+    private func updateDisplayLakes(debounce: Bool = true) {
+        updateTask?.cancel()
+        updateTask = Task { @MainActor in
+            if debounce {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled else { return }
+            }
+
+            // Snapshot the cache so the sort key is stable within this computation
+            let cache = weatherService.weatherCache
+
+            var lakes = dataService.search(searchText)
+            if let state = selectedState {
+                lakes = lakes.filter { $0.state == state }
+            }
+            if let quality = selectedQuality {
+                lakes = lakes.filter { $0.qualityRating?.uppercased() == quality }
+            }
+            if let scoreFilter = selectedScoreFilter {
+                lakes = lakes.filter {
+                    $0.swimScore(weather: cache[$0.id]).total >= scoreFilter.minScore
+                }
+            }
+            switch sortOption {
+            case .bestScore:
+                lakes.sort { a, b in
+                    a.swimScore(weather: cache[a.id]).total > b.swimScore(weather: cache[b.id]).total
+                }
+            case .nearest:
+                if let loc = locationService.userLocation {
+                    let distances = Dictionary(uniqueKeysWithValues: lakes.map { ($0.id, $0.distance(from: loc)) })
+                    lakes.sort { (distances[$0.id] ?? .infinity) < (distances[$1.id] ?? .infinity) }
+                }
+            case .warmest:
+                lakes.sort { ($0.waterTemperature ?? -999) > ($1.waterTemperature ?? -999) }
+            case .coldest:
+                lakes.sort { ($0.waterTemperature ?? 999) < ($1.waterTemperature ?? 999) }
+            case .alphabetical:
+                lakes.sort { $0.name.localizedCompare($1.name) == .orderedAscending }
+            }
+
+            displayTotalCount = lakes.count
+            displayLakes = lakes
+
+            // Hero stats (scoped to all lakes, not just filtered)
+            let allLakes = dataService.lakes
+            cachedGoodScoreCount = allLakes.filter { cache[$0.id] != nil && $0.swimScore(weather: cache[$0.id]).total >= 6.0 }.count
+
+            let scored = allLakes.compactMap { lake -> SwimScore? in
+                guard cache[lake.id] != nil else { return nil }
+                return lake.swimScore(weather: cache[lake.id])
+            }
+            if !scored.isEmpty {
+                let avgTotal = scored.map(\.total).reduce(0, +) / Double(scored.count)
+                cachedAverageScore = scored.min { abs($0.total - avgTotal) < abs($1.total - avgTotal) }
+            } else {
+                cachedAverageScore = nil
+            }
+        }
+    }
+
+    // MARK: - Body
 
     var body: some View {
         NavigationStack {
@@ -237,6 +246,46 @@ struct HomeView: View {
             locationService.requestPermission()
             locationService.startUpdating()
             recentLakes = RecentLake.load()
+
+            // Populate display immediately after data loads (no debounce)
+            updateDisplayLakes(debounce: false)
+
+            // Prefetch weather for the first visible page
+            let prefetchTargets = Array((displayLakes.isEmpty ? dataService.lakes : displayLakes).prefix(30))
+            await weatherService.prefetchWeather(for: prefetchTargets)
+
+            // Re-sort with fresh weather scores
+            updateDisplayLakes(debounce: false)
+        }
+        // React to filter/sort/data changes — reset pagination on most changes
+        .onChange(of: dataService.lakes) {
+            visibleCount = 20
+            updateDisplayLakes(debounce: false)
+        }
+        .onChange(of: sortOption) {
+            visibleCount = 20
+            updateDisplayLakes(debounce: false)
+        }
+        .onChange(of: selectedState) {
+            visibleCount = 20
+            updateDisplayLakes(debounce: false)
+        }
+        .onChange(of: selectedQuality) {
+            visibleCount = 20
+            updateDisplayLakes(debounce: false)
+        }
+        .onChange(of: selectedScoreFilter) {
+            visibleCount = 20
+            updateDisplayLakes(debounce: false)
+        }
+        .onChange(of: searchText) {
+            // Debounce search input so we don't refilter on every keystroke
+            visibleCount = 20
+            updateDisplayLakes(debounce: true)
+        }
+        // Weather updates are debounced — coalesces many individual lake fetches
+        .onChange(of: weatherService.weatherCache.count) {
+            updateDisplayLakes(debounce: true)
         }
     }
 
@@ -365,9 +414,9 @@ struct HomeView: View {
                         .fill(AppTheme.divider)
                         .frame(width: 1, height: 20)
 
-                    ForEach(TempRange.allCases, id: \.rawValue) { range in
-                        filterChip(label: range.label, icon: range.icon, iconColor: range.color, isSelected: selectedTempRange == range) {
-                            withAnimation(AppTheme.quickSpring) { selectedTempRange = selectedTempRange == range ? nil : range }
+                    ForEach(ScoreFilter.allCases, id: \.rawValue) { filter in
+                        filterChip(label: filter.label, icon: filter.icon, iconColor: filter.color, isSelected: selectedScoreFilter == filter) {
+                            withAnimation(AppTheme.quickSpring) { selectedScoreFilter = selectedScoreFilter == filter ? nil : filter }
                         }
                     }
                 }
@@ -394,13 +443,13 @@ struct HomeView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "line.3.horizontal.decrease.circle.fill")
                         .font(.system(size: 12))
-                    Text("\(filteredLakes.count) Ergebnisse")
+                    Text("\(displayLakes.count) Ergebnisse")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                     Spacer()
                     Button {
                         withAnimation(AppTheme.quickSpring) {
                             selectedQuality = nil
-                            selectedTempRange = nil
+                            selectedScoreFilter = nil
                             selectedState = nil
                         }
                     } label: {
@@ -434,7 +483,7 @@ struct HomeView: View {
                     withAnimation(AppTheme.quickSpring) {
                         searchText = ""
                         selectedQuality = nil
-                        selectedTempRange = nil
+                        selectedScoreFilter = nil
                         selectedState = nil
                     }
                 } label: {
@@ -494,16 +543,16 @@ struct HomeView: View {
                     color: AppTheme.oceanBlue
                 )
                 statChip(
+                    icon: "star.fill",
+                    value: "\(cachedGoodScoreCount)",
+                    label: "Guter Score",
+                    color: AppTheme.scoreGut
+                )
+                statChip(
                     icon: "checkmark.seal.fill",
                     value: "\(dataService.lakes.filter { $0.qualityRating?.uppercased() == "A" }.count)",
                     label: "Top Qualität",
                     color: AppTheme.freshGreen
-                )
-                statChip(
-                    icon: "map.fill",
-                    value: "\(dataService.availableStates.count)",
-                    label: "Bundesländer",
-                    color: AppTheme.lavender
                 )
             }
             .padding(.horizontal, 20)
@@ -526,7 +575,7 @@ struct HomeView: View {
         .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    // MARK: - Lake Section
+    // MARK: - Lake Section (horizontal scroll)
 
     private func lakeSection(
         title: String,
@@ -585,7 +634,10 @@ struct HomeView: View {
     // MARK: - All Lakes Section
 
     private var allLakesSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        // Materialise once per render so ForEach and divider check share the same array
+        let visibleLakes = Array(displayLakes.prefix(visibleCount))
+
+        return VStack(alignment: .leading, spacing: 14) {
             if !isSearchActive {
                 HStack(spacing: 8) {
                     Image(systemName: "list.bullet")
@@ -619,7 +671,7 @@ struct HomeView: View {
                         .background(AppTheme.oceanBlue.opacity(0.1), in: Capsule())
                     }
 
-                    Text("\(filteredLakes.count)")
+                    Text("\(displayTotalCount)")
                         .font(.system(size: 14, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
                         .padding(.horizontal, 10)
@@ -644,7 +696,7 @@ struct HomeView: View {
             }
 
             LazyVStack(spacing: 2) {
-                ForEach(filteredLakes.prefix(showAllLakes ? 999 : 20)) { lake in
+                ForEach(visibleLakes) { lake in
                     Button { selectedLake = lake } label: {
                         LakeListRow(
                             lake: lake,
@@ -655,7 +707,8 @@ struct HomeView: View {
                     .buttonStyle(.plain)
                     .contextMenu { lakeContextMenu(lake) }
 
-                    if lake.id != filteredLakes.prefix(showAllLakes ? 999 : 20).last?.id {
+                    // Use materialized array — O(1), no re-evaluation of displayLakes
+                    if lake.id != visibleLakes.last?.id {
                         Divider()
                             .padding(.leading, 74)
                             .padding(.trailing, 20)
@@ -666,12 +719,13 @@ struct HomeView: View {
             .shadow(color: .black.opacity(0.04), radius: 12, y: 4)
             .padding(.horizontal, 16)
 
-            if filteredLakes.count > 20 && !showAllLakes {
+            // Progressive "load more" — adds 20 at a time rather than dumping all at once
+            if displayTotalCount > visibleCount {
                 Button {
-                    withAnimation(AppTheme.gentleSpring) { showAllLakes = true }
+                    withAnimation(AppTheme.gentleSpring) { visibleCount += 20 }
                 } label: {
                     HStack(spacing: 6) {
-                        Text("Alle \(filteredLakes.count) anzeigen")
+                        Text("20 mehr laden (\(displayTotalCount - visibleCount) verbleibend)")
                         Image(systemName: "chevron.down")
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
@@ -776,11 +830,12 @@ struct HomeView: View {
     }
 
     private func shareText(for lake: BathingWater) -> String {
-        var text = "\(lake.name)"
-        if let temp = lake.waterTemperature {
-            text += " – \(String(format: "%.1f°C", temp)) Wassertemperatur"
+        let score = lake.swimScore(weather: weatherService.weatherCache[lake.id])
+        var text = "\(lake.name) – Swim Score: \(String(format: "%.1f", score.total))/10 (\(score.level.label))"
+        if let temp = lake.currentWaterTemperature {
+            text += " – \(String(format: "%.1f°C", temp)) Wasser"
         }
-        text += " \(lake.qualityLabel)"
+        text += " – \(lake.qualityLabel)"
         if let municipality = lake.municipality {
             text += " (\(municipality))"
         }

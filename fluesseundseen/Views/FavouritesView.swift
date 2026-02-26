@@ -192,34 +192,6 @@ struct FavouritesView: View {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [fav.lakeID])
     }
 
-    // MARK: - Helpers
-
-    private func qualityColor(for rating: String) -> Color {
-        let r = rating.uppercased()
-        switch r {
-        case "A": return AppTheme.freshGreen
-        case "G": return AppTheme.teal
-        case "AU": return .orange
-        case "M": return AppTheme.coral
-        default:
-            let low = r.lowercased()
-            if low.contains("ausgezeichnet") { return AppTheme.freshGreen }
-            if low.contains("gut") { return AppTheme.teal }
-            if low.contains("ausreichend") { return .orange }
-            return AppTheme.coral
-        }
-    }
-
-    private func qualityLabel(for rating: String) -> String {
-        let r = rating.uppercased()
-        switch r {
-        case "A": return "Ausgezeichnet"
-        case "G": return "Gut"
-        case "AU": return "Ausreichend"
-        case "M": return "Mangelhaft"
-        default: return rating
-        }
-    }
 }
 
 // MARK: - Extracted row content to support weather fetching
@@ -235,9 +207,16 @@ private struct FavouriteRowContent: View {
     @Environment(WeatherService.self) private var weatherService
     @State private var weather: LakeWeather?
 
+    private var score: SwimScore {
+        if let live {
+            return live.swimScore(weather: weather)
+        }
+        return SwimScore.compute(weather: weather, waterTemp: nil, qualityRating: quality, isClosed: false)
+    }
+
     var body: some View {
         HStack(spacing: 14) {
-            DuckBadge(state: duckState, size: 48)
+            SwimScoreBadge(score: score, size: .medium)
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(fav.lakeName)
@@ -251,10 +230,10 @@ private struct FavouriteRowContent: View {
                 }
 
                 if let q = quality {
-                    let color = qualityColor(for: q)
+                    let color = BathingWater.qualityColor(for: q)
                     HStack(spacing: 5) {
                         Circle().fill(color).frame(width: 7, height: 7)
-                        Text(qualityLabel(for: q))
+                        Text(BathingWater.qualityLabel(for: q))
                             .font(AppTheme.smallCaption)
                             .foregroundStyle(AppTheme.textSecondary)
                     }
@@ -277,11 +256,19 @@ private struct FavouriteRowContent: View {
                 }
 
                 // Water temperature second
-                HStack(spacing: 3) {
-                    Image(systemName: "drop.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(AppTheme.skyBlue)
-                    TemperatureBadge(temperature: temp, size: .small, isOutdated: live?.isTemperatureOutdated ?? Season.isOffSeason)
+                if let waterTemp = live?.currentWaterTemperature {
+                    HStack(spacing: 3) {
+                        Image(systemName: "drop.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(AppTheme.skyBlue)
+                        Text(String(format: "%.0f°C", waterTemp))
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppTheme.textPrimary)
+                    }
+                } else {
+                    Text("Wasser: –")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
 
                 Button(action: toggleNotifications) {
@@ -302,32 +289,6 @@ private struct FavouriteRowContent: View {
         }
     }
 
-    private func qualityColor(for rating: String) -> Color {
-        let r = rating.uppercased()
-        switch r {
-        case "A": return AppTheme.freshGreen
-        case "G": return AppTheme.teal
-        case "AU": return .orange
-        case "M": return AppTheme.coral
-        default:
-            let low = r.lowercased()
-            if low.contains("ausgezeichnet") { return AppTheme.freshGreen }
-            if low.contains("gut") { return AppTheme.teal }
-            if low.contains("ausreichend") { return .orange }
-            return AppTheme.coral
-        }
-    }
-
-    private func qualityLabel(for rating: String) -> String {
-        let r = rating.uppercased()
-        switch r {
-        case "A": return "Ausgezeichnet"
-        case "G": return "Gut"
-        case "AU": return "Ausreichend"
-        case "M": return "Mangelhaft"
-        default: return rating
-        }
-    }
 }
 
 #Preview {
