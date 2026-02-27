@@ -1,11 +1,17 @@
 import SwiftUI
 import SwiftData
 import MapKit
+#if canImport(SafariServices)
+import SafariServices
+#endif
 
 struct LakeDetailView: View {
     let lake: BathingWater
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.openURL) private var openURL
     @Environment(LocationService.self) private var locationService
+    @Environment(LakeContentService.self) private var lakeContentService
+    @Environment(LakePlaceService.self) private var lakePlaceService
     @Query var favourites: [FavouriteItem]
 
     init(lake: BathingWater) {
@@ -14,6 +20,13 @@ struct LakeDetailView: View {
 
     @Environment(WeatherService.self) private var weatherService
     @State private var weather: LakeWeather?
+    @State private var wikipediaContent: LakeWikipediaContent?
+    @State private var isLoadingWikipedia = false
+    @State private var wikipediaDestination: WikipediaDestination?
+    @State private var applePlaceItem: MKMapItem?
+    @State private var isLoadingApplePlace = false
+    @State private var hasApplePlaceLookupMiss = false
+    @State private var applePlaceDestination: ApplePlaceDestination?
     @State private var showShareCard = false
     @State private var showBacteriaValues = false
     @State private var appear = false
@@ -70,8 +83,25 @@ struct LakeDetailView: View {
         .sheet(isPresented: $showShareCard) {
             ShareCardView(lake: lake, weather: weather)
         }
+        .sheet(item: $wikipediaDestination) { destination in
+            WikipediaSheetView(url: destination.url)
+        }
+        .sheet(item: $applePlaceDestination) { destination in
+            ApplePlaceSheetView(mapItem: destination.mapItem)
+        }
         .task {
-            weather = await weatherService.fetchWeather(for: lake)
+            isLoadingWikipedia = true
+            isLoadingApplePlace = true
+            async let weatherTask = weatherService.fetchWeather(for: lake)
+            async let wikipediaTask = lakeContentService.fetchWikipediaContent(for: lake)
+            async let placeTask = lakePlaceService.fetchPlace(for: lake)
+
+            weather = await weatherTask
+            wikipediaContent = await wikipediaTask
+            applePlaceItem = await placeTask
+            isLoadingWikipedia = false
+            isLoadingApplePlace = false
+            hasApplePlaceLookupMiss = applePlaceItem == nil
         }
         .onAppear {
             withAnimation(.easeOut(duration: 0.6)) { appear = true }
@@ -229,6 +259,25 @@ struct LakeDetailView: View {
         VStack(spacing: 16) {
             quickConditionsCard
 
+            if let wikipediaContent {
+                wikipediaCard(content: wikipediaContent)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if isLoadingWikipedia {
+                wikipediaLoadingCard
+                    .transition(.opacity)
+            }
+
+            if let applePlaceItem {
+                appleMapsInfoCard(place: applePlaceItem)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if isLoadingApplePlace {
+                appleMapsLoadingCard
+                    .transition(.opacity)
+            } else if hasApplePlaceLookupMiss {
+                appleMapsUnavailableCard
+                    .transition(.opacity)
+            }
+
             // Score breakdown
             ScoreBreakdownView(score: currentScore)
 
@@ -333,6 +382,359 @@ struct LakeDetailView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(color.opacity(0.10), in: Capsule())
+    }
+
+    private var wikipediaLoadingCard: some View {
+        HStack(spacing: 10) {
+            wikipediaIcon
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Über den See")
+                    .font(AppTheme.cardTitle)
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text("Ducky sucht den passenden Wikipedia-Eintrag …")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            Spacer()
+            ProgressView()
+                .tint(AppTheme.oceanBlue)
+        }
+        .appCard()
+        .shimmer()
+    }
+
+    private func wikipediaCard(content: LakeWikipediaContent) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                wikipediaIcon
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Über den See")
+                        .font(AppTheme.cardTitle)
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(content.pageTitle)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("Sicherer Treffer")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(AppTheme.freshGreen)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(AppTheme.freshGreen.opacity(0.12), in: Capsule())
+            }
+
+            Text(content.summary)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Button {
+                    triggerLightHaptic()
+                    openWikipediaInApp(content.pageURL)
+                } label: {
+                    HStack(spacing: 6) {
+                        wikipediaMiniIcon
+                        Text("Wikipedia")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(AppTheme.oceanBlue, in: Capsule())
+                }
+
+                Button {
+                    triggerLightHaptic()
+                    openInSystemBrowser(content.pageURL)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "safari")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Browser")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                    }
+                    .foregroundStyle(AppTheme.oceanBlue)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(AppTheme.oceanBlue.opacity(0.12), in: Capsule())
+                }
+            }
+        }
+        .appCard()
+        .background(
+            LinearGradient(
+                colors: [AppTheme.oceanBlue.opacity(0.08), .clear],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
+        )
+    }
+
+    private var wikipediaIcon: some View {
+        Circle()
+            .fill(
+                LinearGradient(
+                    colors: [AppTheme.oceanBlue, AppTheme.skyBlue],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .frame(width: 26, height: 26)
+            .overlay(
+                Text("W")
+                    .font(.system(size: 14, weight: .heavy, design: .serif))
+                    .foregroundStyle(.white)
+            )
+            .shadow(color: AppTheme.oceanBlue.opacity(0.22), radius: 6, y: 2)
+    }
+
+    private var wikipediaMiniIcon: some View {
+        Circle()
+            .fill(
+                LinearGradient(
+                    colors: [AppTheme.oceanBlue, AppTheme.skyBlue],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .frame(width: 16, height: 16)
+            .overlay(
+                Text("W")
+                    .font(.system(size: 9, weight: .heavy, design: .serif))
+                    .foregroundStyle(.white)
+            )
+    }
+
+    private func openWikipediaInApp(_ url: URL) {
+        #if canImport(SafariServices) && os(iOS)
+        wikipediaDestination = WikipediaDestination(url: url)
+        #else
+        openURL(url)
+        #endif
+    }
+
+    private func openInSystemBrowser(_ url: URL) {
+        #if os(iOS)
+        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        #else
+        openURL(url)
+        #endif
+    }
+
+    private func triggerLightHaptic() {
+        #if canImport(UIKit)
+        Haptics.light()
+        #endif
+    }
+
+    private var appleMapsLoadingCard: some View {
+        HStack(spacing: 10) {
+            appleMapsIcon
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Mehr aus Apple Maps")
+                    .font(AppTheme.cardTitle)
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text("Ducky sucht den passenden Ort in Apple Maps …")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            Spacer()
+            ProgressView()
+                .tint(AppTheme.teal)
+        }
+        .appCard()
+        .shimmer()
+    }
+
+    private var appleMapsUnavailableCard: some View {
+        HStack(alignment: .top, spacing: 10) {
+            appleMapsIcon
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Mehr aus Apple Maps")
+                    .font(AppTheme.cardTitle)
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text("Für diesen See konnten wir noch keinen sicheren Apple-Maps-Ort finden.")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .appCard()
+    }
+
+    private func appleMapsInfoCard(place: MKMapItem) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                appleMapsIcon
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Mehr aus Apple Maps")
+                        .font(AppTheme.cardTitle)
+                        .foregroundStyle(AppTheme.textPrimary)
+                    Text(place.name ?? lake.name)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                HStack(spacing: 4) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("Live-Ortskarte")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(AppTheme.teal)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(AppTheme.teal.opacity(0.12), in: Capsule())
+            }
+
+            Text("Zeigt dir Öffnungszeiten, Website, Telefonnummer und weitere Ortsinfos direkt in der App, sofern verfügbar.")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineSpacing(2)
+
+            appleMapsMetadataBlock(place: place)
+
+            HStack(spacing: 8) {
+                Button {
+                    triggerLightHaptic()
+                    applePlaceDestination = ApplePlaceDestination(mapItem: place)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "map.fill")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("Ortsinfos öffnen")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(AppTheme.teal, in: Capsule())
+                }
+
+                Button {
+                    triggerLightHaptic()
+                    openInMaps(using: place)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Route")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                    }
+                    .foregroundStyle(AppTheme.teal)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(AppTheme.teal.opacity(0.12), in: Capsule())
+                }
+            }
+        }
+        .appCard()
+        .background(
+            LinearGradient(
+                colors: [AppTheme.teal.opacity(0.08), .clear],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
+        )
+    }
+
+    private var appleMapsIcon: some View {
+        Circle()
+            .fill(
+                LinearGradient(
+                    colors: [AppTheme.teal, AppTheme.skyBlue],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .frame(width: 26, height: 26)
+            .overlay(
+                Image(systemName: "map.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+            )
+            .shadow(color: AppTheme.teal.opacity(0.22), radius: 6, y: 2)
+    }
+
+    @ViewBuilder
+    private func appleMapsMetadataBlock(place: MKMapItem) -> some View {
+        let phone = place.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let websiteHost = place.url?.host ?? place.url?.absoluteString
+        let addressText = appleMapsAddressText(for: place)
+
+        if phone != nil || websiteHost != nil || addressText != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                if let addressText {
+                    appleMapsMetaRow(
+                        icon: "mappin.and.ellipse",
+                        label: "Ort",
+                        value: addressText
+                    )
+                }
+                if let phone, !phone.isEmpty {
+                    appleMapsMetaRow(
+                        icon: "phone.fill",
+                        label: "Telefon",
+                        value: phone
+                    )
+                }
+                if let websiteHost, !websiteHost.isEmpty {
+                    appleMapsMetaRow(
+                        icon: "globe",
+                        label: "Website",
+                        value: websiteHost
+                    )
+                }
+            }
+        }
+    }
+
+    private func appleMapsMetaRow(icon: String, label: String, value: String) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(AppTheme.teal)
+            Text("\(label):")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.textSecondary)
+            Text(value)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(2)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(AppTheme.teal.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func appleMapsAddressText(for place: MKMapItem) -> String? {
+        let placemark = place.placemark
+        var parts: [String] = []
+        if let locality = placemark.locality, !locality.isEmpty {
+            parts.append(locality)
+        }
+        if let admin = placemark.administrativeArea, !admin.isEmpty {
+            parts.append(admin)
+        }
+        if let countryCode = placemark.countryCode, !countryCode.isEmpty, countryCode != "AT" {
+            parts.append(countryCode)
+        }
+        let text = parts.joined(separator: ", ")
+        return text.isEmpty ? nil : text
     }
 
     // MARK: - Season Info Banner
@@ -653,7 +1055,7 @@ struct LakeDetailView: View {
     // MARK: - Route Button
 
     private var routeButton: some View {
-        Button { openInMaps() } label: {
+        Button { openInMaps(using: applePlaceItem) } label: {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
                 Text("Route in Apple Maps")
@@ -681,7 +1083,7 @@ struct LakeDetailView: View {
     // MARK: - Actions
 
     private func toggleFavourite() {
-        Haptics.medium()
+        triggerMediumHaptic()
         if let existing = favourites.first(where: { $0.lakeID == lake.id }) {
             modelContext.delete(existing)
         } else {
@@ -696,16 +1098,130 @@ struct LakeDetailView: View {
         }
     }
 
-    private func openInMaps() {
-        let coordinate = lake.coordinate
-        guard let url = URL(string: "maps://?q=\(lake.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? lake.name)&ll=\(coordinate.latitude),\(coordinate.longitude)") else { return }
+    private func triggerMediumHaptic() {
+        #if canImport(UIKit)
+        Haptics.medium()
+        #endif
+    }
+
+    private func openInMaps(using mapItem: MKMapItem?) {
         #if os(iOS)
-        UIApplication.shared.open(url)
+        let destinationItem: MKMapItem
+        if let mapItem {
+            destinationItem = mapItem
+        } else {
+            let fallback = MKMapItem(placemark: MKPlacemark(coordinate: lake.coordinate))
+            fallback.name = lake.name
+            destinationItem = fallback
+        }
+
+        destinationItem.openInMaps(
+            launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving]
+        )
         #else
+        let coordinate = lake.coordinate
+        guard let url = URL(
+            string: "maps://?q=\(lake.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? lake.name)&ll=\(coordinate.latitude),\(coordinate.longitude)"
+        ) else { return }
         NSWorkspace.shared.open(url)
         #endif
     }
 }
+
+private struct ApplePlaceDestination: Identifiable {
+    let mapItem: MKMapItem
+    let id = UUID()
+}
+
+private struct ApplePlaceSheetView: View {
+    let mapItem: MKMapItem
+
+    var body: some View {
+        #if os(iOS)
+        if #available(iOS 18.0, *) {
+            AppleMapItemDetailController(mapItem: mapItem)
+                .ignoresSafeArea()
+        } else {
+            VStack(spacing: 12) {
+                Text("Apple Maps")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                Text("Diese Ortsansicht ist auf deinem iOS nicht verfügbar.")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+            }
+            .padding(20)
+        }
+        #else
+        VStack(spacing: 12) {
+            Text("Apple Maps")
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+            Text("Ortsdetails sind auf dieser Plattform nicht verfügbar.")
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 20)
+        }
+        .padding(20)
+        #endif
+    }
+}
+
+#if os(iOS)
+@available(iOS 18.0, *)
+private struct AppleMapItemDetailController: UIViewControllerRepresentable {
+    let mapItem: MKMapItem
+
+    func makeUIViewController(context: Context) -> MKMapItemDetailViewController {
+        MKMapItemDetailViewController(mapItem: mapItem, displaysMap: true)
+    }
+
+    func updateUIViewController(_ uiViewController: MKMapItemDetailViewController, context: Context) {
+        uiViewController.mapItem = mapItem
+    }
+}
+#endif
+
+private struct WikipediaDestination: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+private struct WikipediaSheetView: View {
+    let url: URL
+
+    var body: some View {
+        #if canImport(SafariServices) && os(iOS)
+        WikipediaSafariView(url: url)
+            .ignoresSafeArea()
+        #else
+        VStack(spacing: 12) {
+            Text("Wikipedia")
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+            Link("Im Browser öffnen", destination: url)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+        }
+        .padding(20)
+        #endif
+    }
+}
+
+#if canImport(SafariServices) && os(iOS)
+private struct WikipediaSafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let config = SFSafariViewController.Configuration()
+        config.entersReaderIfAvailable = false
+        let controller = SFSafariViewController(url: url, configuration: config)
+        controller.preferredControlTintColor = UIColor.systemBlue
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
+}
+#endif
 
 // MARK: - Card Container (legacy compat)
 
@@ -723,6 +1239,8 @@ struct CardView<Content: View>: View {
         LakeDetailView(lake: .preview)
             .environment(LocationService.shared)
             .environment(WeatherService.shared)
+            .environment(LakeContentService.shared)
+            .environment(LakePlaceService.shared)
             .modelContainer(for: FavouriteItem.self, inMemory: true)
     }
 }
@@ -732,6 +1250,8 @@ struct CardView<Content: View>: View {
         LakeDetailView(lake: .preview)
             .environment(LocationService.shared)
             .environment(WeatherService.shared)
+            .environment(LakeContentService.shared)
+            .environment(LakePlaceService.shared)
             .modelContainer(for: FavouriteItem.self, inMemory: true)
             .preferredColorScheme(.dark)
     }

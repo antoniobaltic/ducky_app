@@ -5,6 +5,8 @@ struct ContentView: View {
     private let dataService = DataService.shared
     private let locationService = LocationService.shared
     private let weatherService = WeatherService.shared
+    private let lakeContentService = LakeContentService.shared
+    private let lakePlaceService = LakePlaceService.shared
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
@@ -24,6 +26,8 @@ struct ContentView: View {
         .environment(dataService)
         .environment(locationService)
         .environment(weatherService)
+        .environment(lakeContentService)
+        .environment(lakePlaceService)
         .preferredColorScheme(appearanceMode.colorScheme)
     }
 

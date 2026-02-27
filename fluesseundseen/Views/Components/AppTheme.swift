@@ -295,13 +295,25 @@ struct BubbleBackground: View {
 
 // MARK: - Haptics
 
-#if canImport(UIKit)
 enum Haptics {
-    static func light() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-    static func medium() { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
-    static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+    static func light() {
+        #if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        #endif
+    }
+
+    static func medium() {
+        #if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
+    }
+
+    static func success() {
+        #if canImport(UIKit)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        #endif
+    }
 }
-#endif
 
 // MARK: - Recent Lakes
 
