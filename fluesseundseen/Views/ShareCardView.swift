@@ -72,7 +72,7 @@ struct ShareCardView: View {
                 Divider()
 
                 VStack(spacing: 6) {
-                    Text(lake.name)
+                    Text(lake.displayName)
                         .font(.system(size: 24, weight: .heavy, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
                         .multilineTextAlignment(.center)
@@ -96,7 +96,7 @@ struct ShareCardView: View {
                         statCell(
                             value: String(format: "%.0f°C", airTemp),
                             label: "Lufttemp.",
-                            color: AppTheme.coral
+                            color: AppTheme.airTempGreen
                         )
                         Divider().frame(height: 36)
                     }
@@ -181,7 +181,7 @@ struct ShareCardView: View {
     private var shareButton: some View {
         ShareLink(
             item: shareText,
-            subject: Text(lake.name),
+            subject: Text(lake.displayName),
             message: Text(verdictSentence)
         ) {
             HStack(spacing: 8) {
@@ -199,7 +199,7 @@ struct ShareCardView: View {
 
     private var shareText: String {
         [
-            "🦆 \(lake.name)",
+            "🦆 \(lake.displayName)",
             verdictSentence,
             "",
             "Flüsse & Seen — Badegewässer Österreich"

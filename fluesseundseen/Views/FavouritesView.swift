@@ -223,7 +223,7 @@ private struct FavouriteRowContent: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Text(fav.lakeName)
+                    Text(live?.displayName ?? fav.lakeName)
                         .font(.system(size: 17, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1)
@@ -245,7 +245,12 @@ private struct FavouriteRowContent: View {
 
                 HStack(spacing: 6) {
                     if let weather, let airTemp = weather.airTemperature {
-                        tempChip(icon: "sun.max.fill", text: String(format: "%.0f°C", airTemp), color: AppTheme.coral)
+                        tempChip(
+                            icon: "wind",
+                            text: String(format: "%.0f°C", airTemp),
+                            color: AppTheme.airTempGreen,
+                            textColor: AppTheme.airTempGreen
+                        )
                     }
                     if let waterTemp = live?.currentWaterTemperature ?? temp {
                         tempChip(icon: "drop.fill", text: String(format: "%.0f°C", waterTemp), color: AppTheme.skyBlue)
@@ -287,14 +292,19 @@ private struct FavouriteRowContent: View {
         }
     }
 
-    private func tempChip(icon: String, text: String, color: Color) -> some View {
+    private func tempChip(
+        icon: String,
+        text: String,
+        color: Color,
+        textColor: Color = AppTheme.textPrimary
+    ) -> some View {
         HStack(spacing: 3) {
             Image(systemName: icon)
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(color)
             Text(text)
                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(AppTheme.textPrimary)
+                .foregroundStyle(textColor)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)

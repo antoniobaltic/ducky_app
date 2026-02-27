@@ -2,70 +2,63 @@ import SwiftUI
 
 // MARK: - Score Breakdown View
 
-/// Card showing the three sub-score components as horizontal progress bars.
+/// Card showing score composition: weather/water base plus quality penalty.
 struct ScoreBreakdownView: View {
     let score: SwimScore
-    @State private var isExpanded = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header with toggle
-            Button {
-                withAnimation(AppTheme.quickSpring) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                HStack {
-                    Image(systemName: "chart.bar.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppTheme.scoreColor(for: score.level))
+            HStack {
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.scoreColor(for: score.level))
 
-                    Text("Score-Details")
-                        .font(AppTheme.cardTitle)
-                        .foregroundStyle(AppTheme.textPrimary)
+                Text("Score-Details")
+                    .font(AppTheme.cardTitle)
+                    .foregroundStyle(AppTheme.textPrimary)
 
-                    Spacer()
-
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
-                }
+                Spacer()
             }
-            .buttonStyle(.plain)
 
-            if isExpanded {
-                VStack(spacing: 10) {
-                    scoreRow(
-                        icon: "sun.max.fill",
-                        label: "Wetter",
-                        value: score.weatherScore,
-                        color: barColor(for: score.weatherScore)
-                    )
+            VStack(spacing: 10) {
+                if let forcedReason = score.forcedReason {
+                    forcedReasonRow(forcedReason)
+                }
 
-                    if let waterScore = score.waterTempScore {
-                        scoreRow(
-                            icon: "thermometer.medium",
-                            label: "Wassertemperatur",
-                            value: waterScore,
-                            color: barColor(for: waterScore)
-                        )
-                    } else {
-                        unavailableRow(
-                            icon: "thermometer.medium",
-                            label: "Wassertemperatur",
-                            message: "Verfügbar Juni – August"
-                        )
-                    }
+                scoreRow(
+                    icon: "wind",
+                    label: score.hasWaterTemp ? "Wetter & Lufttemp. (70%)" : "Wetter & Lufttemp. (100%)",
+                    value: score.weatherScore,
+                    color: AppTheme.airTempGreen
+                )
 
+                if let waterScore = score.waterTempScore {
                     scoreRow(
                         icon: "drop.fill",
-                        label: "Wasserqualität",
-                        value: score.qualityScore,
-                        color: barColor(for: score.qualityScore)
+                        label: "Wassertemp. (30%)",
+                        value: waterScore,
+                        color: AppTheme.oceanBlue
+                    )
+                } else {
+                    unavailableRow(
+                        icon: "drop.fill",
+                        label: "Wassertemp.",
+                        message: "Messungen: Juni bis August"
                     )
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+
+                qualityPenaltyRow
+                if score.hasBacteriaData {
+                    bacteriaPenaltyRow
+                } else {
+                    unavailableRow(
+                        icon: "allergens",
+                        label: "Bakterienabzug",
+                        message: "Nicht in Berechnung (keine Messwerte)"
+                    )
+                }
+
+                formulaRow
             }
         }
         .appCard()
@@ -73,7 +66,12 @@ struct ScoreBreakdownView: View {
 
     // MARK: - Score Row
 
-    private func scoreRow(icon: String, label: String, value: Double, color: Color) -> some View {
+    private func scoreRow(
+        icon: String,
+        label: String,
+        value: Double,
+        color: Color
+    ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Image(systemName: icon)
@@ -89,7 +87,7 @@ struct ScoreBreakdownView: View {
 
                 Text(String(format: "%.1f", value))
                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(color)
+                    .foregroundStyle(AppTheme.textPrimary)
             }
 
             GeometryReader { geo in
@@ -145,15 +143,158 @@ struct ScoreBreakdownView: View {
         }
     }
 
-    private func barColor(for value: Double) -> Color {
-        switch value {
-        case 8...10: return AppTheme.scorePerfekt
-        case 6..<8:  return AppTheme.scoreGut
-        case 4..<6:  return AppTheme.scoreMittel
-        case 2..<4:  return AppTheme.scoreSchlecht
-        default:     return AppTheme.scoreWarnung
+    private var qualityPenaltyRow: some View {
+        let deduction = abs(score.qualityPenalty)
+        let magnitude = min(1.0, deduction / 2.0)
+        let color: Color = deduction > 0 ? AppTheme.coral : AppTheme.freshGreen
+        let valueText = String(format: "%.1f", deduction)
+
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(color)
+                    .frame(width: 18)
+
+                Text("Qualitätsabzug (\(score.qualityBand.label))")
+                    .font(AppTheme.caption)
+                    .foregroundStyle(AppTheme.textSecondary)
+
+                Spacer()
+
+                Text(valueText)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(color.opacity(0.15))
+                        .frame(height: 6)
+
+                    Capsule()
+                        .fill(color)
+                        .frame(width: max(0, geo.size.width * magnitude), height: 6)
+                }
+            }
+            .frame(height: 6)
         }
     }
+
+    private var bacteriaPenaltyRow: some View {
+        let deduction = abs(score.bacteriaPenalty)
+        let magnitude = min(1.0, deduction / 2.8)
+        let color: Color = deduction > 0 ? AppTheme.coral : AppTheme.freshGreen
+        let valueText = String(format: "%.1f", deduction)
+
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Image(systemName: "allergens")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(color)
+                    .frame(width: 18)
+
+                Text("Bakterienabzug (E.Coli/Enterokokken)")
+                    .font(AppTheme.caption)
+                    .foregroundStyle(AppTheme.textSecondary)
+
+                Spacer()
+
+                Text(valueText)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(color.opacity(0.15))
+                        .frame(height: 6)
+
+                    Capsule()
+                        .fill(color)
+                        .frame(width: max(0, geo.size.width * magnitude), height: 6)
+                }
+            }
+            .frame(height: 6)
+        }
+    }
+
+    private var formulaRow: some View {
+        let qualityDeduction = abs(score.qualityPenalty)
+        let bacteriaDeduction = score.hasBacteriaData ? abs(score.bacteriaPenalty) : 0.0
+        let totalDeduction = qualityDeduction + bacteriaDeduction
+        let unclamped = score.baseScore - totalDeduction
+        let equation: String = {
+            if score.hasBacteriaData {
+                return String(
+                    format: "%.1f − %.1f − %.1f = %.1f",
+                    score.baseScore,
+                    qualityDeduction,
+                    bacteriaDeduction,
+                    score.total
+                )
+            } else {
+                return String(
+                    format: "%.1f − %.1f = %.1f",
+                    score.baseScore,
+                    qualityDeduction,
+                    score.total
+                )
+            }
+        }()
+        let wasClamped = abs(unclamped - score.total) > 0.05
+
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Image(systemName: "function")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .frame(width: 18)
+
+                Text("Formel")
+                    .font(AppTheme.caption)
+                    .foregroundStyle(AppTheme.textSecondary)
+
+                Spacer()
+
+                Text(equation)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+            }
+
+            if wasClamped {
+                Text("Ergebnis wird auf mindestens 0.0 begrenzt.")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
+            }
+        }
+    }
+
+    private func forcedReasonRow(_ reason: SwimScore.ForcedReason) -> some View {
+        let message: String
+        switch reason {
+        case .closed:
+            message = "Gewässer ist gesperrt: Score wurde auf Warnung gesetzt."
+        case .poorQuality:
+            message = "Wasserqualität ist mangelhaft: Score wurde auf Warnung gesetzt."
+        }
+
+        return HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(AppTheme.coral)
+            Text(message)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppTheme.textSecondary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(AppTheme.coral.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
 }
 
 // MARK: - Preview

@@ -68,7 +68,7 @@ struct HomeView: View {
             case .bestScore:    return "star.fill"
             case .nearest:      return "location.fill"
             case .alphabetical: return "textformat.abc"
-            case .airTemperature: return "sun.max.fill"
+            case .airTemperature: return "wind"
             case .waterTemperature: return "drop.fill"
             }
         }
@@ -730,7 +730,7 @@ struct HomeView: View {
                                 SwimScoreBadge(score: pick.score, size: .medium)
 
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(pick.lake.name)
+                                    Text(pick.lake.displayName)
                                         .font(.system(size: 15, weight: .bold, design: .rounded))
                                         .foregroundStyle(AppTheme.textPrimary)
                                         .lineLimit(1)
@@ -1013,7 +1013,7 @@ struct HomeView: View {
 
     private func shareText(for lake: BathingWater) -> String {
         let score = lake.swimScore(weather: weatherService.weatherCache[lake.id])
-        var text = "\(lake.name) – Swim Score: \(String(format: "%.1f", score.total))/10 (\(score.level.label))"
+        var text = "\(lake.displayName) – Swim Score: \(String(format: "%.1f", score.total))/10 (\(score.level.label))"
         if let temp = lake.currentWaterTemperature {
             text += " – \(String(format: "%.1f°C", temp)) Wasser"
         }
@@ -1031,7 +1031,7 @@ struct HomeView: View {
         } else {
             let item = FavouriteItem(
                 lakeID: lake.id,
-                lakeName: lake.name,
+                lakeName: lake.displayName,
                 municipalityName: lake.municipality,
                 lastKnownTemperature: lake.waterTemperature,
                 lastKnownQuality: lake.qualityRating

@@ -4,6 +4,7 @@ import MapKit
 
 struct LakeDetailView: View {
     let lake: BathingWater
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
     @Environment(LocationService.self) private var locationService
@@ -25,6 +26,7 @@ struct LakeDetailView: View {
     @State private var showShareCard = false
     @State private var showBacteriaValues = false
     @State private var appear = false
+    @State private var selectedHeroQuote = ""
 
     private var isFavourite: Bool {
         favourites.contains { $0.lakeID == lake.id }
@@ -35,15 +37,49 @@ struct LakeDetailView: View {
     }
 
     private var heroQuote: String {
-        if lake.isTemperatureOutdated && lake.waterTemperature != nil {
-            switch Season.current {
-            case .winter: return "Winterpause. Ducky liegt im Bett. Weck mich im Juni."
-            case .spring: return "Bald! Ducky kann es kaum erwarten."
-            case .autumn: return "Saison vorbei. Ducky schmollt bis Juni."
-            case .summer: return currentScore.duckState.line
-            }
+        if !selectedHeroQuote.isEmpty {
+            return selectedHeroQuote
         }
-        return currentScore.duckState.line
+        return heroQuotes(for: currentScore.level).first ?? currentScore.duckState.line
+    }
+
+    private func heroQuotes(for level: SwimScore.Level) -> [String] {
+        switch level {
+        case .perfekt:
+            return [
+                "Oida, heit is so leiwand, i hupf glei mit Bauchfleck eini!",
+                "Sonne, Wasser, vielleicht a Bier. REIN DA!",
+                "Des is ka Badetag, des is a Staatsfeiertag für Enten."
+            ]
+        case .gut:
+            return [
+                "Passt scho, oida. Ned göttlich, oba ziemlich gschmeidig.",
+                "Ducky nickt wie a Kellner im Beisl. Jo, des geht fix.",
+                "A bisserl wild, a bisserl geil. I würd's machen."
+            ]
+        case .mittel:
+            return [
+                "Heast, kann ma machen, muss ma aber ned.",
+                "Da Bademeister schaut skeptisch, i schau skeptisch, sogar die Badehosn schaut skeptisch.",
+                "Ziemlich mid. Aba manchmal muss ma a Risiko gehn."
+            ]
+        case .schlecht:
+            return [
+                "Brrr, oida. Des Wasser gibt da instant Gänsehaut am Popsch.",
+                "Do geh i nur mit Wärmeflasche and guada Versicherung eini.",
+                "Wennst do reingehst, brauchst danach an Tee und a Lebensentscheidung."
+            ]
+        case .warnung:
+            return [
+                "Na sicher ned. Des is ka See, des is a Fehlermeldung mit Ufer.",
+                "Do zieh i die Notbremse. Oida, heit bleibt ma trocken!",
+                "Do wüst eini? Na fix net. Geh ma ham Playstation zocken."
+            ]
+        }
+    }
+
+    private func randomHeroQuote(for level: SwimScore.Level) -> String {
+        heroQuotes(for: level).randomElement() ?? currentScore.duckState.line
     }
 
     private var heroTextPrimary: Color { .black.opacity(0.88) }
@@ -59,11 +95,19 @@ struct LakeDetailView: View {
         .background(
             ZStack(alignment: .top) {
                 AppTheme.pageGradient
-                BubbleBackground(color: AppTheme.lightBlue).opacity(0.35)
-                currentScore.duckState.backgroundGradient
-                    .frame(height: 220)
-                    .ignoresSafeArea(edges: .top)
+                AppTheme.detailPageGradient(for: currentScore.level, isDark: colorScheme == .dark)
+                BubbleBackground(color: AppTheme.scoreColor(for: currentScore.level))
+                    .opacity(colorScheme == .dark ? 0.14 : 0.20)
+                LinearGradient(
+                    colors: [.clear, AppTheme.pageBackground.opacity(colorScheme == .dark ? 0.90 : 0.80)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .ignoresSafeArea()
             }
+            .ignoresSafeArea()
         )
         .ignoresSafeArea(edges: .top)
         .iOSNavigationBarInline()
@@ -100,152 +144,195 @@ struct LakeDetailView: View {
         }
         .onAppear {
             withAnimation(.easeOut(duration: 0.6)) { appear = true }
-            RecentLake.add(RecentLake(id: lake.id, name: lake.name))
+            selectedHeroQuote = randomHeroQuote(for: currentScore.level)
+            RecentLake.add(RecentLake(id: lake.id, name: lake.displayName))
+        }
+        .onChange(of: currentScore.level) { _, newLevel in
+            selectedHeroQuote = randomHeroQuote(for: newLevel)
         }
     }
 
     // MARK: - Hero Section
 
+    private var heroConditionLabel: String {
+        switch currentScore.level {
+        case .perfekt: return "Perfekte Badebedingungen"
+        case .gut: return "Gute Badebedingungen"
+        case .mittel: return "Mittelmäßige Badebedingungen"
+        case .schlecht: return "Schlechte Badebedingungen"
+        case .warnung: return "Kritische Badebedingungen"
+        }
+    }
+
     private var heroSection: some View {
-        ZStack(alignment: .bottom) {
-            ZStack {
-                currentScore.duckState.backgroundGradient
-                    .frame(height: 400)
+        VStack(spacing: 0) {
+            Spacer(minLength: 80)
+
+            SwimScoreBadge(score: currentScore, size: .hero, showHeroDetails: false)
+                .scaleEffect(appear ? 1 : 0.8)
+                .opacity(appear ? 1 : 0)
+                .padding(.bottom, 8)
+
+            Text(heroConditionLabel)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.scoreColor(for: currentScore.level))
+                .multilineTextAlignment(.center)
+                .padding(.bottom, 14)
+
+            // Name + location
+            VStack(spacing: 6) {
+                Text(lake.displayName)
+                    .font(.system(size: 28, weight: .heavy, design: .rounded))
+                    .foregroundStyle(heroTextPrimary)
+                    .multilineTextAlignment(.center)
+
+                HStack(spacing: 6) {
+                    if let municipality = lake.municipality {
+                        Text(municipality)
+                    }
+                    if let state = lake.state {
+                        Text("·")
+                        Text(state)
+                    }
+                }
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(heroTextSecondary)
+
+                if lake.isClosed {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                        Text("Gesperrt")
+                        if let reason = lake.closureReason, !reason.isEmpty {
+                            Text("– \(reason)")
+                        }
+                    }
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(AppTheme.coral, in: Capsule())
+                    .padding(.top, 4)
+                }
+            }
+            .padding(.bottom, 14)
+
+            // Temperature display: Air + Water side by side
+            HStack(alignment: .top, spacing: 20) {
+                heroTemperatureColumn(
+                    icon: "wind",
+                    iconColor: AppTheme.airTempGreen,
+                    label: "Lufttemp."
+                ) {
+                    if let airTemp = weather?.airTemperature {
+                        heroNumericTemperatureValue(
+                            valueText: String(format: "%.0f", airTemp),
+                            color: AppTheme.airTempGreen
+                        )
+                    } else {
+                        heroUnknownTemperatureValue
+                    }
+                }
+
+                heroTemperatureColumn(
+                    icon: "drop.fill",
+                    iconColor: AppTheme.oceanBlue,
+                    label: "Wassertemp.",
+                    footnote: lake.currentWaterTemperature == nil ? "(Messungen: Juni bis August)" : nil
+                ) {
+                    if let waterTemp = lake.currentWaterTemperature {
+                        heroNumericTemperatureValue(
+                            valueText: String(format: "%.1f", waterTemp),
+                            color: AppTheme.oceanBlue
+                        )
+                    } else {
+                        Text("Unbekannt")
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(AppTheme.oceanBlue.opacity(0.85))
+                    }
+                }
+            }
+            .padding(.bottom, 16)
+
+            // Ducky + quote at the bottom of the hero
+            HStack(alignment: .center, spacing: 10) {
+                DuckView(state: currentScore.duckState, size: 50)
+                    .scaleEffect(appear ? 1 : 0.7)
+                    .opacity(appear ? 1 : 0)
+
+                Text("\u{201E}\(heroQuote)\u{201C}")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(heroTextPrimary)
+                    .italic()
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+
+            Spacer(minLength: 28)
+        }
+        .padding(.horizontal, 24)
+        .background {
+            ZStack(alignment: .bottom) {
+                AppTheme.detailHeroGradient(for: currentScore.level, isDark: colorScheme == .dark)
 
                 // Floating bubbles
                 FloatingBubblesView(count: 5, color: .white.opacity(0.25))
-                    .frame(height: 400)
+                    .allowsHitTesting(false)
+
+                // Wave at bottom of hero
+                WaterWaveView(baseColor: AppTheme.pageBackground, height: 30, speed: 0.6)
+                    .frame(height: 30)
+                    .offset(y: 14)
+                    .allowsHitTesting(false)
             }
-
-            // Wave at bottom of hero
-            WaterWaveView(baseColor: AppTheme.pageBackground, height: 30, speed: 0.6)
-                .frame(height: 30)
-                .offset(y: 14)
-
-            VStack(spacing: 0) {
-                Spacer(minLength: 80)
-
-                // Score badge as centerpiece
-                SwimScoreBadge(score: currentScore, size: .hero)
-                    .scaleEffect(appear ? 1 : 0.8)
-                    .opacity(appear ? 1 : 0)
-                    .padding(.bottom, 8)
-
-                // Ducky + quote
-                HStack(alignment: .center, spacing: 10) {
-                    DuckView(state: currentScore.duckState, size: 50)
-                        .scaleEffect(appear ? 1 : 0.7)
-                        .opacity(appear ? 1 : 0)
-
-                    Text("\u{201E}\(heroQuote)\u{201C}")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundStyle(heroTextPrimary)
-                        .italic()
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Spacer()
-                }
-                .padding(.bottom, 12)
-
-                // Name + location
-                VStack(spacing: 6) {
-                    Text(lake.name)
-                        .font(.system(size: 28, weight: .heavy, design: .rounded))
-                        .foregroundStyle(heroTextPrimary)
-                        .multilineTextAlignment(.center)
-
-                    HStack(spacing: 6) {
-                        if let municipality = lake.municipality {
-                            Text(municipality)
-                        }
-                        if let state = lake.state {
-                            Text("·")
-                            Text(state)
-                        }
-                    }
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(heroTextSecondary)
-
-                    if lake.isClosed {
-                        HStack(spacing: 6) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                            Text("Gesperrt")
-                            if let reason = lake.closureReason, !reason.isEmpty {
-                                Text("– \(reason)")
-                            }
-                        }
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(AppTheme.coral, in: Capsule())
-                        .padding(.top, 4)
-                    }
-                }
-
-                // Temperature display: Air + Water side by side
-                HStack(spacing: 0) {
-                    // Air temperature
-                    if let weather, let airTemp = weather.airTemperature {
-                        VStack(spacing: 4) {
-                            Image(systemName: "sun.max.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(AppTheme.coral)
-                            HStack(alignment: .top, spacing: 2) {
-                                Text(String(format: "%.0f", airTemp))
-                                    .font(.system(size: 36, weight: .heavy, design: .rounded))
-                                    .foregroundStyle(AppTheme.coral)
-                                Text("°C")
-                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(AppTheme.coral.opacity(0.7))
-                                    .padding(.top, 5)
-                            }
-                            Text("Luft")
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                .foregroundStyle(heroTextSecondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-
-                    // Water temperature
-                    VStack(spacing: 4) {
-                        Image(systemName: "drop.fill")
-                            .font(.system(size: 20))
-                            .foregroundStyle(AppTheme.oceanBlue)
-                        if let temp = lake.currentWaterTemperature {
-                            HStack(alignment: .top, spacing: 2) {
-                                Text(String(format: "%.1f", temp))
-                                    .font(.system(size: 36, weight: .heavy, design: .rounded))
-                                    .foregroundStyle(AppTheme.oceanBlue)
-                                Text("°C")
-                                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(AppTheme.oceanBlue.opacity(0.7))
-                                    .padding(.top, 5)
-                            }
-                        } else {
-                            Text("Unbekannt")
-                                .font(.system(size: 20, weight: .bold, design: .rounded))
-                                .foregroundStyle(heroTextSecondary)
-                                .padding(.vertical, 8)
-                        }
-                        Text("Wasser")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundStyle(heroTextSecondary)
-                        if lake.currentWaterTemperature == nil {
-                            Text("Messungen: Juni – August")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundStyle(heroTextSecondary.opacity(0.85))
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .padding(.top, 14)
-
-                Spacer(minLength: 28)
-            }
-            .padding(.horizontal, 24)
         }
+    }
+
+    private func heroTemperatureColumn<Content: View>(
+        icon: String,
+        iconColor: Color,
+        label: String,
+        footnote: String? = nil,
+        @ViewBuilder valueContent: () -> Content
+    ) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundStyle(iconColor)
+
+            valueContent()
+                .frame(height: 46)
+
+            Text(label)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(heroTextSecondary)
+
+            Text(footnote ?? " ")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(heroTextSecondary.opacity(0.85))
+                .lineLimit(1)
+                .minimumScaleFactor(0.88)
+                .opacity(footnote == nil ? 0 : 1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func heroNumericTemperatureValue(valueText: String, color: Color) -> some View {
+        HStack(alignment: .top, spacing: 2) {
+            Text(valueText)
+                .font(.system(size: 36, weight: .heavy, design: .rounded))
+                .foregroundStyle(color)
+            Text("°C")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(color.opacity(0.7))
+                .padding(.top, 5)
+        }
+    }
+
+    private var heroUnknownTemperatureValue: some View {
+        Text("—")
+            .font(.system(size: 36, weight: .heavy, design: .rounded))
+            .foregroundStyle(heroTextSecondary.opacity(0.55))
     }
 
     // MARK: - Content
@@ -281,7 +368,7 @@ struct LakeDetailView: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 4)
+        .padding(.top, 10)
         .padding(.bottom, 40)
     }
 
@@ -295,28 +382,35 @@ struct LakeDetailView: View {
                     .font(AppTheme.cardTitle)
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
-                DuckView(state: currentScore.duckState, size: 28)
             }
 
             HStack(spacing: 8) {
+                if let weather {
+                    let weatherStyle = weatherConditionChipStyle(for: weather)
+                    quickConditionChip(
+                        icon: weather.conditionSymbol,
+                        value: weather.conditionDescription,
+                        color: weatherStyle
+                    )
+                }
                 if let weather, let airTemp = weather.airTemperature {
                     quickConditionChip(
-                        icon: "sun.max.fill",
-                        value: String(format: "%.0f°C Luft", airTemp),
-                        color: AppTheme.coral
+                        icon: "wind",
+                        value: String(format: "Luft: %.0f°C", airTemp),
+                        color: AppTheme.airTempGreen
                     )
                 }
                 if let waterTemp = lake.currentWaterTemperature {
                     quickConditionChip(
                         icon: "drop.fill",
-                        value: String(format: "%.1f°C Wasser", waterTemp),
-                        color: AppTheme.skyBlue
+                        value: String(format: "Wasser: %.1f°C", waterTemp),
+                        color: AppTheme.oceanBlue
                     )
                 } else {
                     quickConditionChip(
                         icon: "drop.fill",
-                        value: "Wasser: Unbekannt",
-                        color: AppTheme.textSecondary
+                        value: "Wasser: Unbek.",
+                        color: AppTheme.oceanBlue
                     )
                 }
             }
@@ -329,24 +423,42 @@ struct LakeDetailView: View {
                         color: AppTheme.teal
                     )
                 }
-                if let weather {
-                    quickConditionChip(
-                        icon: weather.conditionSymbol,
-                        value: weather.conditionDescription,
-                        color: AppTheme.sunshine,
-                        textColor: .black.opacity(0.75)
-                    )
-                }
             }
         }
         .appCard()
     }
 
+    private func weatherConditionChipStyle(for weather: LakeWeather) -> Color {
+        guard let code = weather.weatherCode else {
+            return AppTheme.textSecondary
+        }
+
+        switch code {
+        case 0, 1:
+            return AppTheme.sunshine
+        case 2, 3:
+            return AppTheme.textSecondary
+        case 45, 48:
+            return AppTheme.textSecondary
+        case 51, 53, 55:
+            return AppTheme.skyBlue
+        case 56, 57, 66, 67:
+            return AppTheme.lavender
+        case 61, 63, 65, 80, 81, 82:
+            return AppTheme.oceanBlue
+        case 71, 73, 75, 77, 85, 86:
+            return AppTheme.lightBlue
+        case 95, 96, 99:
+            return AppTheme.coral
+        default:
+            return AppTheme.textSecondary
+        }
+    }
+
     private func quickConditionChip(
         icon: String,
         value: String,
-        color: Color,
-        textColor: Color = AppTheme.textPrimary
+        color: Color
     ) -> some View {
         HStack(spacing: 5) {
             Image(systemName: icon)
@@ -354,7 +466,7 @@ struct LakeDetailView: View {
                 .foregroundStyle(color)
             Text(value)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(textColor)
+                .foregroundStyle(AppTheme.textPrimary)
                 .lineLimit(1)
         }
         .padding(.horizontal, 10)
@@ -532,7 +644,7 @@ struct LakeDetailView: View {
                     Text("Apple Maps")
                         .font(AppTheme.cardTitle)
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text(place.name ?? lake.name)
+                    Text(place.name ?? lake.displayName)
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
                         .lineLimit(1)
@@ -667,10 +779,11 @@ struct LakeDetailView: View {
             HStack(spacing: 8) {
                 if let airTemp = weather.airTemperature {
                     weatherStat(
-                        icon: "thermometer.medium",
+                        icon: "wind",
                         value: String(format: "%.0f°C", airTemp),
                         label: "Lufttemperatur",
-                        color: AppTheme.coral
+                        color: AppTheme.airTempGreen,
+                        valueColor: AppTheme.airTempGreen
                     )
                 }
                 if let uv = weather.uvIndex {
@@ -907,7 +1020,7 @@ struct LakeDetailView: View {
     private var mapCard: some View {
         ZStack(alignment: .topLeading) {
             Map {
-                Marker(lake.name, coordinate: lake.coordinate)
+                Marker(lake.displayName, coordinate: lake.coordinate)
                     .tint(AppTheme.oceanBlue)
             }
             .allowsHitTesting(false)
@@ -965,7 +1078,7 @@ struct LakeDetailView: View {
         } else {
             let item = FavouriteItem(
                 lakeID: lake.id,
-                lakeName: lake.name,
+                lakeName: lake.displayName,
                 municipalityName: lake.municipality,
                 lastKnownTemperature: lake.waterTemperature,
                 lastKnownQuality: lake.qualityRating

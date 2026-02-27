@@ -141,6 +141,7 @@ This document is the operational guide for future work in `fluesseundseen`.
 - Removed search filters must stay removed:
   - Quality filters (`Ausgezeichnet`, etc.)
   - Score preset filters (`Perfekt`, `Gut+`, etc.)
+- Air-temperature iconography uses a neutral `wind` symbol (not sun/cloud) in sorting and temperature chips.
 
 ### Map (`Views/MapView.swift`)
 - Tapped-lake bottom card is intentionally minimal:
@@ -150,12 +151,35 @@ This document is the operational guide for future work in `fluesseundseen`.
   - actions: `Details`, `Route`
 - Do not reintroduce score verdict text (e.g. `Mittelmäßig`) in this compact card.
 - If values are missing, use robust placeholders (`Luft –`, `Wasser –`) instead of collapsing layout.
+- Air-temperature chip uses `wind` icon and `AppTheme.airTempGreen` (text/icon).
 
 ### Lake Detail (`Views/LakeDetailView.swift`)
-- Hero area in dark mode uses dedicated darker text colors for readability over bright seasonal backgrounds.
-- Hero seasonal color treatment must extend to the very top safe area (status bar / Dynamic Island area included).
+- Hero area in dark mode uses dedicated darker text colors for readability over bright backgrounds.
+- Hero and page background are score-level driven gradients (not duck-state seasonal gradients), and must extend to the very top safe area (status bar / Dynamic Island area included).
+- Hero headline below score circle is level text:
+  - `Perfekte Badebedingungen`
+  - `Gute Badebedingungen`
+  - `Mittelmäßige Badebedingungen`
+  - `Schlechte Badebedingungen`
+  - `Kritische Badebedingungen`
+- Hero quote behavior:
+  - Quote depends exclusively on score level.
+  - Three quote variants exist per score level and are selected randomly.
+  - Quote block is centered in the hero (not left-bound).
 - `Auf einen Blick` card is present and should stay concise and readable.
+- `Auf einen Blick` structure:
+  - order is weather condition, air temperature, water temperature, distance
+  - no duck icon in this card
+  - chip text uses neutral text color; icon and pill tint carry the semantic color
+  - weather chip icon/label come from WMO weather mapping and chip color changes by weather condition
+  - air chip uses `wind` icon and `AppTheme.airTempGreen`
+  - water chip uses blue (`AppTheme.oceanBlue`) for known and unknown states
+  - chip copy format is `Luft: {temp}°C` and `Wasser: {temp}°C` / `Wasser: Unbek.`
 - The `Außerhalb der Badesaison` card is intentionally removed and should not be reintroduced.
+- Hero temperature labels are:
+  - `Lufttemp.`
+  - `Wassertemp.`
+  - measurement note text is exactly `(Messungen: Juni bis August)` when current water temperature is unavailable.
 - Apple Maps + Standort + Route are merged into one card:
   - Header/title is `Apple Maps`.
   - Apple Maps metadata block appears at the top when available (Ort/Telefon/Website), with loading and unavailable fallback states.
@@ -165,12 +189,47 @@ This document is the operational guide for future work in `fluesseundseen`.
 - Wikipedia card behavior:
   - Keep only the top-right `Browser` button in the card header.
   - Keep removed elements removed: `Sicherer Treffer` badge and bottom `Wikipedia` row/button.
+- Score details card behavior:
+  - always expanded (no collapse chevron/toggle)
+  - weather row label is `Wetter & Lufttemp. ({weight}%)` with `wind` icon in `AppTheme.airTempGreen`
+  - water row label is `Wassertemp. (30%)` with `drop.fill` icon and blue styling when data exists
+  - when water is unavailable, row stays grey and message is `Messungen: Juni bis August`
+  - quality deduction icon is `checkmark.shield.fill` (match Wasserqualität card)
+  - bacteria deduction icon is `allergens` (match Bakteriologie card)
+  - all row text is neutral; color is carried by icons and bars
+  - do not show explanatory `Basis = ...` helper text
+  - formula uses subtractive form (`base − deductions = total`) and may show clamp note.
 - Interactive reliability:
   - Decorative overlays (card strokes, glow, shimmer) must remain non-interactive (`.allowsHitTesting(false)`) so buttons keep working in previews and simulator.
 
 ### Favorites (`Views/FavouritesView.swift`)
 - Favorites rows prioritize score and temperatures.
 - Water quality should not be a dominant UI element; keep it secondary/minimal.
+- Air-temperature chip uses `wind` icon + `AppTheme.airTempGreen`.
+
+### Scoring (`Models/SwimScore.swift`)
+- Current weights:
+  - with current water temperature: weather `70%`, water temperature `30%`
+  - without current water temperature: weather `100%`
+- Quality is deduction-only:
+  - `A`: `0.0`
+  - `G`: `-0.4`
+  - `AU`: `-1.8`
+  - unknown: `0.0`
+- Bacteria deduction is active (from latest `E.Coli` / `Enterokokken` values):
+  - `E.Coli > 500`: `-0.5`, `> 1000`: `-1.4`
+  - `Enterokokken > 200`: `-0.5`, `> 400`: `-1.4`
+  - combined bacteria deduction capped at `-2.8`
+  - missing bacteria values => no bacteria deduction
+- Forced overrides remain:
+  - `isClosed` => total `1.0` (`warnung`)
+  - poor quality (`mangelhaft`) => total `1.5` (`warnung`)
+- Final score is clamped to `0.0...10.0` (minimum is `0.0`, not `1.0`).
+
+### Lake Naming (`Models/BathingWater.swift`)
+- UI display names use `displayName` cleanup logic:
+  - trailing `, <place>` is removed when `<place>` is effectively the same municipality
+  - raw `name` remains unchanged for API extraction and service lookups (Apple Maps/AGES integrations must not break).
 
 ### Settings / Features
 - Notification feature is currently removed/de-scoped and should not be reintroduced accidentally in UI flows.

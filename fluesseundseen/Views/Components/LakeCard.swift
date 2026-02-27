@@ -35,7 +35,7 @@ struct LakeCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(lake.name)
+                        Text(lake.displayName)
                             .font(.system(size: 15, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.textPrimary)
                             .lineLimit(2)
@@ -57,12 +57,12 @@ struct LakeCard: View {
                 HStack(spacing: 5) {
                     if let weather, let airTemp = weather.airTemperature {
                         HStack(spacing: 2) {
-                            Image(systemName: "sun.max.fill")
+                            Image(systemName: "wind")
                                 .font(.system(size: 9))
-                                .foregroundStyle(AppTheme.coral)
+                                .foregroundStyle(AppTheme.airTempGreen)
                             Text(String(format: "%.0f°", airTemp))
                                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                                .foregroundStyle(AppTheme.textPrimary)
+                                .foregroundStyle(AppTheme.airTempGreen)
                         }
                     }
 
@@ -124,7 +124,7 @@ struct LakeListRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(lake.name)
+                    Text(lake.displayName)
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
                     if isFavourite {
@@ -154,12 +154,12 @@ struct LakeListRow: View {
             VStack(alignment: .trailing, spacing: 5) {
                 if let weather, let airTemp = weather.airTemperature {
                     HStack(spacing: 3) {
-                        Image(systemName: "sun.max.fill")
+                        Image(systemName: "wind")
                             .font(.system(size: 10))
-                            .foregroundStyle(AppTheme.coral)
+                            .foregroundStyle(AppTheme.airTempGreen)
                         Text(String(format: "%.0f°C", airTemp))
                             .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppTheme.textPrimary)
+                            .foregroundStyle(AppTheme.airTempGreen)
                     }
                 }
 

@@ -24,6 +24,13 @@ struct BathingWater: Identifiable, Hashable {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
+    /// Cleaned display name for UI:
+    /// removes trailing ", <place>" when that place matches the municipality.
+    /// Keeps raw `name` unchanged for API/services/lookups.
+    var displayName: String {
+        Self.cleanedDisplayName(rawName: name, municipality: municipality)
+    }
+
     var location: CLLocation {
         CLLocation(latitude: latitude, longitude: longitude)
     }
@@ -67,7 +74,9 @@ struct BathingWater: Identifiable, Hashable {
             weather: weather,
             waterTemp: currentWaterTemperature,
             qualityRating: qualityRating,
-            isClosed: isClosed
+            isClosed: isClosed,
+            eColi: eColi,
+            enterococci: enterococci
         )
     }
 
@@ -210,6 +219,55 @@ struct BathingWater: Identifiable, Hashable {
 
     func distance(from userLocation: CLLocation) -> Double {
         location.distance(from: userLocation) / 1000.0
+    }
+
+    // MARK: - Name Cleanup
+
+    private static func cleanedDisplayName(rawName: String, municipality: String?) -> String {
+        let trimmedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let municipality, !municipality.isEmpty else { return trimmedName }
+
+        guard let commaIndex = trimmedName.lastIndex(of: ",") else { return trimmedName }
+        let base = String(trimmedName[..<commaIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let suffix = String(trimmedName[trimmedName.index(after: commaIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !base.isEmpty, !suffix.isEmpty else { return trimmedName }
+        guard shouldDropPlaceSuffix(suffix, municipality: municipality) else { return trimmedName }
+        return base
+    }
+
+    private static func shouldDropPlaceSuffix(_ suffix: String, municipality: String) -> Bool {
+        let normalizedSuffix = normalizePlace(suffix)
+        let normalizedMunicipality = normalizePlace(municipality)
+        guard !normalizedSuffix.isEmpty, !normalizedMunicipality.isEmpty else { return false }
+
+        // Exact municipality match
+        if normalizedSuffix == normalizedMunicipality { return true }
+
+        // Municipality variants like:
+        // "Mörbisch am See", "Kalsdorf bei Graz", "Unterpremstätten-Zettling"
+        guard normalizedMunicipality.hasPrefix(normalizedSuffix) else { return false }
+        let remainder = String(normalizedMunicipality.dropFirst(normalizedSuffix.count))
+        if remainder.isEmpty { return true }
+
+        let allowedContinuations = [
+            " am ", " an ", " im ", " bei ", " in ", " auf ", " ob ", " unter ", "-"
+        ]
+        return allowedContinuations.contains { remainder.hasPrefix($0) }
+    }
+
+    private static func normalizePlace(_ text: String) -> String {
+        let expanded = text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "(?i)\\bst\\.\\s*", with: "sankt ", options: .regularExpression)
+            .replacingOccurrences(of: "(?i)\\bwr\\.\\s*", with: "wiener ", options: .regularExpression)
+            .replacingOccurrences(of: "(?i)a\\.\\s*d\\.", with: "an der", options: .regularExpression)
+            .replacingOccurrences(of: "(?i)a\\.\\s*p\\.", with: "am pyhrn", options: .regularExpression)
+
+        return expanded
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "de_AT"))
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Hashable

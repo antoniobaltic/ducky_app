@@ -43,7 +43,7 @@ struct MapView: View {
             ZStack(alignment: .bottom) {
                 Map(position: $cameraPosition, selection: $selectedLake) {
                     ForEach(visibleLakes) { lake in
-                        Annotation(lake.name, coordinate: lake.coordinate, anchor: .bottom) {
+                        Annotation(lake.displayName, coordinate: lake.coordinate, anchor: .bottom) {
                             ScorePinView(score: lake.swimScore(weather: weatherService.weatherCache[lake.id]))
                                 .scaleEffect(selectedLake?.id == lake.id ? 1.3 : 1.0)
                                 .animation(AppTheme.quickSpring, value: selectedLake?.id)
@@ -113,7 +113,7 @@ struct MapView: View {
                     SwimScoreBadge(score: score, size: .medium)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(lake.name)
+                        Text(lake.displayName)
                             .font(.system(size: 18, weight: .heavy, design: .rounded))
                             .foregroundStyle(AppTheme.textPrimary)
                             .lineLimit(2)
@@ -151,9 +151,14 @@ struct MapView: View {
 
             HStack(spacing: 12) {
                 if let weather = selectedWeather, let airTemp = weather.airTemperature {
-                    miniInfoChip(icon: "sun.max.fill", value: String(format: "%.0f°C", airTemp), color: AppTheme.coral)
+                    miniInfoChip(
+                        icon: "wind",
+                        value: String(format: "%.0f°C", airTemp),
+                        color: AppTheme.airTempGreen,
+                        textColor: AppTheme.airTempGreen
+                    )
                 } else {
-                    miniInfoChip(icon: "sun.max.fill", value: "Luft –", color: AppTheme.textSecondary)
+                    miniInfoChip(icon: "wind", value: "Luft –", color: AppTheme.textSecondary)
                 }
                 if let waterTemp = lake.currentWaterTemperature {
                     miniInfoChip(icon: "drop.fill", value: String(format: "%.0f°C", waterTemp), color: AppTheme.skyBlue)
@@ -206,14 +211,19 @@ struct MapView: View {
         .animation(AppTheme.springAnimation, value: selectedLake?.id)
     }
 
-    private func miniInfoChip(icon: String, value: String, color: Color) -> some View {
+    private func miniInfoChip(
+        icon: String,
+        value: String,
+        color: Color,
+        textColor: Color = AppTheme.textPrimary
+    ) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(color)
             Text(value)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(AppTheme.textPrimary)
+                .foregroundStyle(textColor)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)

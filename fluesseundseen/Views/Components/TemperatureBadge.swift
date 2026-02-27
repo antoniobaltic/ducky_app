@@ -97,7 +97,7 @@ struct TemperatureBadge: View {
                         .font(.system(size: 15, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                     if Season.isOffSeason {
-                        Text("Messungen: Juni – August")
+                        Text("(Messungen: Juni bis August)")
                             .font(.system(size: 12, weight: .regular, design: .rounded))
                             .foregroundStyle(.tertiary)
                     }

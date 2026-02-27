@@ -2,13 +2,18 @@ import Foundation
 
 // MARK: - Swim Score
 
-/// Composite score (1–10) that factors weather, water temperature, and water quality
+/// Composite score (0–10) that factors weather, water temperature, and water quality
 /// to give users a single "should I swim today?" indicator.
 struct SwimScore {
-    let total: Double          // 1.0 – 10.0
+    let total: Double          // 0.0 – 10.0
+    let baseScore: Double      // pre-penalty score from weather/water-temp
     let weatherScore: Double   // 0.0 – 10.0
     let waterTempScore: Double? // nil when no current water temp
-    let qualityScore: Double   // 0.0 – 10.0
+    let qualityPenalty: Double // 0.0 or negative adjustment from quality band
+    let bacteriaPenalty: Double // 0.0 or negative adjustment from live bacteria
+    let hasBacteriaData: Bool
+    let qualityBand: QualityBand
+    let forcedReason: ForcedReason?
     let level: Level
 
     // MARK: - Score Levels
@@ -41,6 +46,29 @@ struct SwimScore {
         }
     }
 
+    enum QualityBand: String {
+        case ausgezeichnet
+        case gut
+        case ausreichend
+        case mangelhaft
+        case unknown
+
+        var label: String {
+            switch self {
+            case .ausgezeichnet: return "Ausgezeichnet"
+            case .gut: return "Gut"
+            case .ausreichend: return "Ausreichend"
+            case .mangelhaft: return "Mangelhaft"
+            case .unknown: return "Keine Einstufung"
+            }
+        }
+    }
+
+    enum ForcedReason {
+        case closed
+        case poorQuality
+    }
+
     // MARK: - DuckState Mapping
 
     var duckState: DuckState {
@@ -65,86 +93,117 @@ struct SwimScore {
 
     /// Compute the composite swim score from available data.
     ///
-    /// Weights when all data available: weather 40%, water temp 35%, quality 25%
-    /// Weights when no water temp:      weather 65%, quality 35%
+    /// Base when all data available: weather 70%, water temp 30%
+    /// Base when no water temp:      weather 100%
+    /// Quality is a penalty only (never boosts): A 0.0, G -0.4, AU -1.8, unknown 0.0.
+    /// Live bacteria values (E.Coli/Enterokokken) add an extra penalty when elevated.
     static func compute(
         weather: LakeWeather?,
         waterTemp: Double?,         // nil = no current measurement
         qualityRating: String?,
-        isClosed: Bool
+        isClosed: Bool,
+        eColi: Double? = nil,
+        enterococci: Double? = nil
     ) -> SwimScore {
+        let wScore = weatherSubScore(weather)
+        let qualityBand = qualityBand(for: qualityRating)
+        let liveBacteriaPenalty = bacteriaDeduction(eColi: eColi, enterococci: enterococci)
+        let hasBacteriaData = eColi != nil || enterococci != nil
+
         // Forced warning for closed or poor-quality lakes
         if isClosed {
             return SwimScore(
                 total: 1.0,
-                weatherScore: weatherSubScore(weather),
+                baseScore: wScore,
+                weatherScore: wScore,
                 waterTempScore: waterTemp.map { waterTempSubScore($0) },
-                qualityScore: 0,
+                qualityPenalty: 0.0,
+                bacteriaPenalty: 0.0,
+                hasBacteriaData: hasBacteriaData,
+                qualityBand: qualityBand,
+                forcedReason: .closed,
                 level: .warnung
             )
         }
 
-        if let rating = qualityRating?.uppercased(),
-           rating == "M" || rating.contains("MANGELHAFT") || rating.contains("POOR") {
+        if qualityBand == .mangelhaft {
             return SwimScore(
                 total: 1.5,
-                weatherScore: weatherSubScore(weather),
+                baseScore: wScore,
+                weatherScore: wScore,
                 waterTempScore: waterTemp.map { waterTempSubScore($0) },
-                qualityScore: 1.0,
+                qualityPenalty: -2.0,
+                bacteriaPenalty: 0.0,
+                hasBacteriaData: hasBacteriaData,
+                qualityBand: qualityBand,
+                forcedReason: .poorQuality,
                 level: .warnung
             )
         }
 
-        let wScore = weatherSubScore(weather)
-        let qScore = qualitySubScore(qualityRating)
+        let penalty = qualityPenalty(for: qualityBand)
 
-        let total: Double
+        let base: Double
         if let waterTemp {
             let wtScore = waterTempSubScore(waterTemp)
-            // All data: weather 40%, water 35%, quality 25%
-            total = wScore * 0.40 + wtScore * 0.35 + qScore * 0.25
+            // Base: weather 70%, water 30%
+            base = wScore * 0.70 + wtScore * 0.30
+            let total = clamp(base + penalty + liveBacteriaPenalty)
             return SwimScore(
-                total: clamp(total),
+                total: total,
+                baseScore: base,
                 weatherScore: wScore,
                 waterTempScore: wtScore,
-                qualityScore: qScore,
-                level: level(for: clamp(total))
+                qualityPenalty: penalty,
+                bacteriaPenalty: liveBacteriaPenalty,
+                hasBacteriaData: hasBacteriaData,
+                qualityBand: qualityBand,
+                forcedReason: nil,
+                level: level(for: total)
             )
         } else {
-            // No water temp: weather 65%, quality 35%
-            total = wScore * 0.65 + qScore * 0.35
+            // Base without water temp: weather only
+            base = wScore
+            let total = clamp(base + penalty + liveBacteriaPenalty)
             return SwimScore(
-                total: clamp(total),
+                total: total,
+                baseScore: base,
                 weatherScore: wScore,
                 waterTempScore: nil,
-                qualityScore: qScore,
-                level: level(for: clamp(total))
+                qualityPenalty: penalty,
+                bacteriaPenalty: liveBacteriaPenalty,
+                hasBacteriaData: hasBacteriaData,
+                qualityBand: qualityBand,
+                forcedReason: nil,
+                level: level(for: total)
             )
         }
     }
 
     // MARK: - Sub-Score Calculations
 
-    /// Weather sub-score (0–10) based on air temp, feels-like, UV, wind, precip, conditions
+    /// Weather sub-score (0–10) based on air temp, feels-like, wind, precip, conditions
     private static func weatherSubScore(_ weather: LakeWeather?) -> Double {
         guard let w = weather else { return 5.0 } // neutral fallback
 
         var score = 0.0
 
-        // Air temperature component (0–10): optimal 24–28°C
+        // Air temperature component (0–10): warm/hot days are preferred for swimming
         if let airTemp = w.airTemperature {
-            if airTemp >= 24 && airTemp <= 28 {
+            if airTemp >= 30 {
                 score += 10.0
-            } else if airTemp > 28 {
-                score += max(5.0, 10.0 - (airTemp - 28) * 0.8)
-            } else if airTemp >= 20 {
-                score += 7.0 + (airTemp - 20) * 0.75
-            } else if airTemp >= 15 {
-                score += 3.0 + (airTemp - 15) * 0.8
-            } else if airTemp >= 10 {
-                score += 1.0 + (airTemp - 10) * 0.4
+            } else if airTemp >= 26 {
+                score += 8.6 + (airTemp - 26) * 0.35   // 26 -> 8.6, 30 -> 10
+            } else if airTemp >= 22 {
+                score += 7.0 + (airTemp - 22) * 0.40   // 22 -> 7.0, 26 -> 8.6
+            } else if airTemp >= 18 {
+                score += 4.2 + (airTemp - 18) * 0.70   // 18 -> 4.2, 22 -> 7.0
+            } else if airTemp >= 14 {
+                score += 2.2 + (airTemp - 14) * 0.50   // 14 -> 2.2, 18 -> 4.2
+            } else if airTemp >= 8 {
+                score += 0.8 + (airTemp - 8) * 0.2333  // 8 -> 0.8, 14 -> 2.2
             } else {
-                score += max(0, 1.0 + airTemp * 0.1)
+                score += max(0, airTemp * 0.1)
             }
         } else {
             score += 5.0 // neutral
@@ -159,15 +218,6 @@ struct SwimScore {
                 score -= 0.5
             } else if diff > 2 {
                 score += 0.5  // feels warmer than actual
-            }
-        }
-
-        // UV adjustment (-0.5 to +0.5)
-        if let uv = w.uvIndex {
-            if uv >= 3 && uv <= 6 {
-                score += 0.5  // pleasant sun
-            } else if uv > 8 {
-                score -= 0.5  // dangerous UV
             }
         }
 
@@ -238,22 +288,53 @@ struct SwimScore {
         }
     }
 
-    /// Quality sub-score (0–10) based on EU bathing water quality classification
-    private static func qualitySubScore(_ rating: String?) -> Double {
-        guard let rating = rating?.uppercased(), !rating.isEmpty else { return 5.0 } // unknown → neutral
+    private static func qualityBand(for rating: String?) -> QualityBand {
+        guard let rating = rating?.uppercased(), !rating.isEmpty else { return .unknown }
         switch rating {
-        case "A":  return 10.0  // Ausgezeichnet
-        case "G":  return 7.0   // Gut
-        case "AU": return 4.0   // Ausreichend
-        case "M":  return 1.0   // Mangelhaft (handled above as warnung, but just in case)
+        case "A": return .ausgezeichnet
+        case "G": return .gut
+        case "AU": return .ausreichend
+        case "M": return .mangelhaft
         default:
             let r = rating.lowercased()
-            if r.contains("ausgezeichnet") || r.contains("excellent") { return 10.0 }
-            if r.contains("gut") || r.contains("good") { return 7.0 }
-            if r.contains("ausreichend") || r.contains("sufficient") { return 4.0 }
-            if r.contains("mangelhaft") || r.contains("poor") { return 1.0 }
-            return 5.0 // unknown
+            if r.contains("ausgezeichnet") || r.contains("excellent") { return .ausgezeichnet }
+            if r.contains("gut") || r.contains("good") { return .gut }
+            if r.contains("ausreichend") || r.contains("sufficient") { return .ausreichend }
+            if r.contains("mangelhaft") || r.contains("poor") { return .mangelhaft }
+            return .unknown
         }
+    }
+
+    private static func qualityPenalty(for band: QualityBand) -> Double {
+        switch band {
+        case .ausgezeichnet: return 0.0
+        case .gut: return -0.4
+        case .ausreichend: return -1.8
+        case .mangelhaft: return -2.0
+        case .unknown: return 0.0
+        }
+    }
+
+    private static func bacteriaDeduction(eColi: Double?, enterococci: Double?) -> Double {
+        var deduction = 0.0
+
+        if let eColi {
+            if eColi > 1000 {
+                deduction -= 1.4
+            } else if eColi > 500 {
+                deduction -= 0.5
+            }
+        }
+
+        if let enterococci {
+            if enterococci > 400 {
+                deduction -= 1.4
+            } else if enterococci > 200 {
+                deduction -= 0.5
+            }
+        }
+
+        return max(-2.8, deduction)
     }
 
     // MARK: - Helpers
@@ -269,6 +350,6 @@ struct SwimScore {
     }
 
     private static func clamp(_ value: Double) -> Double {
-        max(1.0, min(10.0, value))
+        max(0.0, min(10.0, value))
     }
 }

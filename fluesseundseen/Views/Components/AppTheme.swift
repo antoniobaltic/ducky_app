@@ -32,6 +32,7 @@ enum AppTheme {
     static let coral = Color(red: 1.0, green: 0.38, blue: 0.24)
     static let sunshine = Color(red: 1.0, green: 0.80, blue: 0.0)
     static let freshGreen = Color(red: 0.18, green: 0.80, blue: 0.44)
+    static let airTempGreen = Color(red: 0.16, green: 0.46, blue: 0.24)
     static let lavender = Color(red: 0.56, green: 0.38, blue: 1.0)
     static let warmPink = Color(red: 1.0, green: 0.34, blue: 0.53)
 
@@ -163,6 +164,32 @@ enum AppTheme {
         let base = scoreColor(for: level)
         return LinearGradient(
             colors: [base.opacity(0.8), base],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    static func detailPageGradient(for level: SwimScore.Level, isDark: Bool) -> LinearGradient {
+        let base = scoreColor(for: level)
+        return LinearGradient(
+            colors: [
+                base.opacity(isDark ? 0.44 : 0.26),
+                base.opacity(isDark ? 0.28 : 0.16),
+                pageBackground.opacity(isDark ? 0.96 : 0.88)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    static func detailHeroGradient(for level: SwimScore.Level, isDark: Bool) -> LinearGradient {
+        let base = scoreColor(for: level)
+        return LinearGradient(
+            colors: [
+                base.opacity(isDark ? 0.56 : 0.34),
+                base.opacity(isDark ? 0.42 : 0.23),
+                base.opacity(isDark ? 0.18 : 0.09)
+            ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )

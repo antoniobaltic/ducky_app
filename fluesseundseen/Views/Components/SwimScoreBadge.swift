@@ -6,6 +6,7 @@ import SwiftUI
 struct SwimScoreBadge: View {
     let score: SwimScore
     let size: BadgeSize
+    var showHeroDetails: Bool = true
 
     enum BadgeSize {
         case small   // horizontal card overlay
@@ -41,7 +42,11 @@ struct SwimScoreBadge: View {
 
     var body: some View {
         if size == .hero {
-            heroLayout
+            if showHeroDetails {
+                heroLayout
+            } else {
+                heroCircle
+            }
         } else {
             compactLayout
         }
@@ -76,26 +81,7 @@ struct SwimScoreBadge: View {
 
     private var heroLayout: some View {
         VStack(spacing: 6) {
-            ZStack {
-                // Outer glow ring
-                Circle()
-                    .fill(AppTheme.scoreColor(for: score.level).opacity(0.2))
-                    .frame(width: size.diameter + 16, height: size.diameter + 16)
-
-                Circle()
-                    .fill(AppTheme.scoreGradient(for: score.level))
-                    .frame(width: size.diameter, height: size.diameter)
-
-                VStack(spacing: -2) {
-                    Text(scoreText)
-                        .font(.system(size: size.fontSize, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
-
-                    Text("/10")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.7))
-                }
-            }
+            heroCircle
 
             Text(score.level.label)
                 .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -104,6 +90,29 @@ struct SwimScoreBadge: View {
             Text(score.scoreLabel)
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(AppTheme.textSecondary)
+        }
+    }
+
+    private var heroCircle: some View {
+        ZStack {
+            // Outer glow ring
+            Circle()
+                .fill(AppTheme.scoreColor(for: score.level).opacity(0.2))
+                .frame(width: size.diameter + 16, height: size.diameter + 16)
+
+            Circle()
+                .fill(AppTheme.scoreGradient(for: score.level))
+                .frame(width: size.diameter, height: size.diameter)
+
+            VStack(spacing: -2) {
+                Text(scoreText)
+                    .font(.system(size: size.fontSize, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text("/10")
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
         }
     }
 
