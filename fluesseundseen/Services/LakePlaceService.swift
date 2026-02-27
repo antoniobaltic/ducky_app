@@ -84,7 +84,7 @@ extension LakePlaceService {
                 continue
             }
 
-            let coordinate = item.placemark.coordinate
+            let coordinate = item.location.coordinate
             let key = "\(normalize(mapName))|\(Int(coordinate.latitude * 10_000))|\(Int(coordinate.longitude * 10_000))"
             guard seen.insert(key).inserted else { continue }
 
