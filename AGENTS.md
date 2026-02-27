@@ -113,7 +113,7 @@ This document is the operational guide for future work in `fluesseundseen`.
 - Ducky remains the main personality anchor.
 - Keep score/ranking correctness above perceived speed hacks.
 
-## Current UX Baseline (2026-02-26)
+## Current UX Baseline (2026-02-27)
 
 - This section reflects the latest product decisions and should be treated as current behavior requirements unless explicitly changed by product direction.
 
@@ -153,7 +153,20 @@ This document is the operational guide for future work in `fluesseundseen`.
 
 ### Lake Detail (`Views/LakeDetailView.swift`)
 - Hero area in dark mode uses dedicated darker text colors for readability over bright seasonal backgrounds.
+- Hero seasonal color treatment must extend to the very top safe area (status bar / Dynamic Island area included).
 - `Auf einen Blick` card is present and should stay concise and readable.
+- The `Außerhalb der Badesaison` card is intentionally removed and should not be reintroduced.
+- Apple Maps + Standort + Route are merged into one card:
+  - Header/title is `Apple Maps`.
+  - Apple Maps metadata block appears at the top when available (Ort/Telefon/Website), with loading and unavailable fallback states.
+  - The `Standort` map appears directly below the Apple Maps info in the same card.
+  - `Route in Apple Maps` is a single full-width button below the map inside the same card.
+  - Removed elements that must stay removed: `Live-Ortskarte`, `Ortsinfos öffnen`, small header `Route` button.
+- Wikipedia card behavior:
+  - Keep only the top-right `Browser` button in the card header.
+  - Keep removed elements removed: `Sicherer Treffer` badge and bottom `Wikipedia` row/button.
+- Interactive reliability:
+  - Decorative overlays (card strokes, glow, shimmer) must remain non-interactive (`.allowsHitTesting(false)`) so buttons keep working in previews and simulator.
 
 ### Favorites (`Views/FavouritesView.swift`)
 - Favorites rows prioritize score and temperatures.
