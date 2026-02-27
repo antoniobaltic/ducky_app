@@ -142,34 +142,9 @@ struct LakeListRow: View {
                     }
                 }
 
-                HStack(spacing: 4) {
-                    if let municipality = lake.municipality {
-                        Text(municipality)
-                            .font(AppTheme.caption)
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .lineLimit(1)
-                    }
-                    if let state = lake.state {
-                        Text("·")
-                            .foregroundStyle(.tertiary)
-                        Text(state)
-                            .font(AppTheme.caption)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                            .layoutPriority(-1)
-                    }
-                    if let dist = distanceKm {
-                        Text("·")
-                            .foregroundStyle(.tertiary)
-                        HStack(spacing: 2) {
-                            Image(systemName: "location.fill")
-                                .font(.system(size: 9))
-                            Text(String(format: "%.0f km", dist))
-                                .font(AppTheme.smallCaption)
-                        }
-                        .foregroundStyle(.tertiary)
-                        .fixedSize()
-                    }
+                ViewThatFits(in: .horizontal) {
+                    metadataLine
+                    metadataFallbackStack
                 }
             }
 
@@ -208,6 +183,73 @@ struct LakeListRow: View {
         .padding(.horizontal, 16)
         .task {
             weather = await weatherService.fetchWeather(for: lake)
+        }
+    }
+
+    private var metadataLine: some View {
+        HStack(spacing: 4) {
+            locationTextLine
+            if distanceKm != nil {
+                if hasLocationMeta {
+                    Text("·")
+                        .foregroundStyle(.tertiary)
+                }
+                distanceChip
+            }
+        }
+    }
+
+    private var metadataFallbackStack: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            locationTextLine
+            HStack(spacing: 0) {
+                distanceChip
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private var locationTextLine: some View {
+        HStack(spacing: 4) {
+            if let municipality = lake.municipality, !municipality.isEmpty {
+                Text(municipality)
+                    .font(AppTheme.caption)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            if let state = lake.shortStateLabel, !state.isEmpty {
+                if let municipality = lake.municipality, !municipality.isEmpty {
+                    Text("·")
+                        .foregroundStyle(.tertiary)
+                }
+                Text(state)
+                    .font(AppTheme.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+    }
+
+    private var hasLocationMeta: Bool {
+        let hasMunicipality = !(lake.municipality?.isEmpty ?? true)
+        let hasState = !(lake.shortStateLabel?.isEmpty ?? true)
+        return hasMunicipality || hasState
+    }
+
+    @ViewBuilder
+    private var distanceChip: some View {
+        if let dist = distanceKm {
+            HStack(spacing: 2) {
+                Image(systemName: "location.fill")
+                    .font(.system(size: 9))
+                Text(String(format: "%.0f km", dist))
+                    .font(AppTheme.smallCaption)
+            }
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 }

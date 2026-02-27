@@ -61,6 +61,14 @@ enum AppTheme {
         light: (0.94, 0.94, 0.96),
         dark: (0.18, 0.18, 0.20)
     )
+    static let cardStroke = adaptive(
+        light: (0.86, 0.89, 0.94),
+        dark: (0.26, 0.27, 0.30)
+    )
+    static let glowOverlay = adaptive(
+        light: (1.0, 1.0, 1.0),
+        dark: (0.38, 0.42, 0.52)
+    )
 
     // MARK: - Gradients
 
@@ -90,6 +98,18 @@ enum AppTheme {
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
+
+    static var pageGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                pageBackground,
+                oceanBlue.opacity(0.06),
+                teal.opacity(0.04)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 
     // MARK: - Typography
 
@@ -161,6 +181,8 @@ enum AppTheme {
     static let springAnimation = Animation.spring(response: 0.5, dampingFraction: 0.75, blendDuration: 0)
     static let gentleSpring = Animation.spring(response: 0.6, dampingFraction: 0.8, blendDuration: 0)
     static let quickSpring = Animation.spring(response: 0.35, dampingFraction: 0.7, blendDuration: 0)
+    static let entranceSpring = Animation.spring(response: 0.52, dampingFraction: 0.84, blendDuration: 0.05)
+    static let smoothEase = Animation.easeInOut(duration: 0.9)
 }
 
 // MARK: - Card Style Modifier
@@ -172,7 +194,24 @@ struct AppCardStyle: ViewModifier {
         content
             .padding(padding)
             .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
-            .shadow(color: .black.opacity(0.06), radius: 16, x: 0, y: 4)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
+                    .stroke(AppTheme.cardStroke.opacity(0.45), lineWidth: 1)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                AppTheme.glowOverlay.opacity(0.10),
+                                .clear
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .shadow(color: .black.opacity(0.07), radius: 16, x: 0, y: 6)
     }
 }
 

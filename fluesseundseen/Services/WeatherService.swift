@@ -19,11 +19,31 @@ struct LakeWeather {
 @Observable
 final class WeatherService {
     var weatherCache: [String: LakeWeather] = [:]
+    var cacheRevision = 0
+    var hydrationTotal = 0
+    var hydrationCompleted = 0
+    var isHydratingAll = false
+    var isUsingStaleCache = false
 
     static let shared = WeatherService()
     private let cacheTTL: TimeInterval = 30 * 60 // 30 minutes
+    private let maxConcurrentFetches = 24
+    private let maxHydrationAttempts = 3
 
     private var saveCacheTask: Task<Void, Never>?
+    private var hydrationTask: Task<Void, Never>?
+    private var inFlightFetches: [String: Task<LakeWeather?, Never>] = [:]
+    private var cacheTimestamp: Date?
+
+    var hydrationProgress: Double {
+        guard hydrationTotal > 0 else { return 0 }
+        return Double(hydrationCompleted) / Double(hydrationTotal)
+    }
+
+    var isCacheFresh: Bool {
+        guard let cacheTimestamp else { return false }
+        return Date().timeIntervalSince(cacheTimestamp) < cacheTTL
+    }
 
     private init() {
         // Clean up legacy UserDefaults cache entries
@@ -34,14 +54,78 @@ final class WeatherService {
 
     // MARK: - Public API
 
-    /// Fetch weather for a single lake. Cache-first; network only if missing.
-    func fetchWeather(for lake: BathingWater) async -> LakeWeather? {
-        if let cached = weatherCache[lake.id] { return cached }
+    func hasCompleteWeather(for lakes: [BathingWater]) -> Bool {
+        let unique = uniqueLakes(lakes)
+        guard !unique.isEmpty else { return true }
+        return unique.allSatisfy { weatherCache[$0.id] != nil }
+    }
 
-        // networkFetch is nonisolated (static), so it runs off the MainActor
-        // while this function suspends here — MainActor stays free.
-        guard let weather = await Self.networkFetch(for: lake) else { return nil }
+    /// Startup strategy:
+    /// - If complete cache exists, allow instant score ranking.
+    /// - If cache is stale, refresh in background without blocking launch.
+    /// - If incomplete, block once and fetch missing weather for all lakes.
+    func bootstrapWeather(for lakes: [BathingWater]) async {
+        let unique = uniqueLakes(lakes)
+        guard !unique.isEmpty else {
+            hydrationTotal = 0
+            hydrationCompleted = 0
+            return
+        }
+
+        hydrationTotal = unique.count
+        hydrationCompleted = unique.filter { weatherCache[$0.id] != nil }.count
+
+        if hasCompleteWeather(for: unique) {
+            if !isCacheFresh {
+                isUsingStaleCache = true
+                refreshAllWeatherInBackground(for: unique)
+            } else {
+                isUsingStaleCache = false
+            }
+            return
+        }
+
+        await hydrateAllWeather(for: unique, forceRefresh: false)
+        isUsingStaleCache = !isCacheFresh
+    }
+
+    /// Background full refresh for existing complete caches.
+    func refreshAllWeatherInBackground(for lakes: [BathingWater]) {
+        let unique = uniqueLakes(lakes)
+        guard !unique.isEmpty else { return }
+        guard hydrationTask == nil else { return }
+        Task { await hydrateAllWeather(for: unique, forceRefresh: true) }
+    }
+
+    /// Ensure all requested lakes have weather. Used by startup flow.
+    func hydrateAllWeather(for lakes: [BathingWater], forceRefresh: Bool) async {
+        if let running = hydrationTask {
+            await running.value
+            return
+        }
+
+        let unique = uniqueLakes(lakes)
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.runHydration(for: unique, forceRefresh: forceRefresh)
+        }
+        hydrationTask = task
+        await task.value
+        hydrationTask = nil
+    }
+
+    /// Fetch weather for a single lake. Cache-first by default, deduped by in-flight tasks.
+    func fetchWeather(for lake: BathingWater, forceRefresh: Bool = false) async -> LakeWeather? {
+        if !forceRefresh, let cached = weatherCache[lake.id] { return cached }
+        if let inFlight = inFlightFetches[lake.id] { return await inFlight.value }
+
+        let task = Task { await Self.networkFetch(for: lake) }
+        inFlightFetches[lake.id] = task
+        defer { inFlightFetches[lake.id] = nil }
+
+        guard let weather = await task.value else { return nil }
         weatherCache[lake.id] = weather
+        cacheRevision &+= 1
         scheduleSave()
         return weather
     }
@@ -49,37 +133,92 @@ final class WeatherService {
     /// Prefetch weather for multiple lakes with at most 10 concurrent network requests.
     /// Results are written to cache in a single batch after all fetches complete.
     func prefetchWeather(for lakes: [BathingWater]) async {
-        let toFetch = lakes.filter { weatherCache[$0.id] == nil }
-        guard !toFetch.isEmpty else { return }
+        await runHydration(for: uniqueLakes(lakes), forceRefresh: false, showProgress: false)
+    }
 
-        // All network work happens off-MainActor (static nonisolated func).
-        // TaskGroup collects results, then we write to cache once on MainActor.
-        let results = await withTaskGroup(of: (String, LakeWeather?).self) { group in
-            var pending = toFetch.makeIterator()
-            var active = 0
-            let maxConcurrent = 10
+    private func runHydration(
+        for lakes: [BathingWater],
+        forceRefresh: Bool,
+        showProgress: Bool = true
+    ) async {
+        guard !lakes.isEmpty else { return }
 
-            // Seed initial batch
-            while active < maxConcurrent, let lake = pending.next() {
-                group.addTask { await (lake.id, Self.networkFetch(for: lake)) }
-                active += 1
+        let toFetch = forceRefresh ? lakes : lakes.filter { weatherCache[$0.id] == nil }
+        if showProgress {
+            hydrationTotal = lakes.count
+            hydrationCompleted = lakes.count - toFetch.count
+            isHydratingAll = !toFetch.isEmpty
+        }
+
+        guard !toFetch.isEmpty else {
+            if showProgress { isHydratingAll = false }
+            if forceRefresh { scheduleSave() }
+            isUsingStaleCache = !isCacheFresh
+            return
+        }
+
+        var remaining = toFetch
+        for attempt in 1...maxHydrationAttempts {
+            guard !remaining.isEmpty else { break }
+
+            await fetchBatchWeather(for: remaining, forceRefresh: forceRefresh)
+            remaining = remaining.filter { weatherCache[$0.id] == nil }
+
+            if showProgress {
+                hydrationCompleted = lakes.count - remaining.count
             }
 
-            var collected: [(String, LakeWeather?)] = []
-            for await result in group {
-                collected.append(result)
-                // Feed next item as a slot opens up
-                if let next = pending.next() {
-                    group.addTask { await (next.id, Self.networkFetch(for: next)) }
+            // Auto-retry transient failures (timeouts/rate limits) before showing manual retry.
+            if !remaining.isEmpty && attempt < maxHydrationAttempts {
+                try? await Task.sleep(for: .milliseconds(350 * attempt))
+            }
+        }
+
+        if showProgress {
+            hydrationCompleted = lakes.filter { weatherCache[$0.id] != nil }.count
+            isHydratingAll = false
+        }
+        isUsingStaleCache = !isCacheFresh
+        scheduleSave()
+    }
+
+    private func fetchBatchWeather(for lakes: [BathingWater], forceRefresh: Bool) async {
+        guard !lakes.isEmpty else { return }
+
+        await withTaskGroup(of: Void.self) { group in
+            var pending = lakes.makeIterator()
+            let initial = min(maxConcurrentFetches, lakes.count)
+
+            for _ in 0..<initial {
+                if let lake = pending.next() {
+                    group.addTask { [weak self] in
+                        guard let self else { return }
+                        _ = await self.fetchWeather(for: lake, forceRefresh: forceRefresh)
+                    }
                 }
             }
-            return collected
-        }
 
-        for (id, weather) in results {
-            if let weather { weatherCache[id] = weather }
+            while await group.next() != nil {
+                if let next = pending.next() {
+                    group.addTask { [weak self] in
+                        guard let self else { return }
+                        _ = await self.fetchWeather(for: next, forceRefresh: forceRefresh)
+                    }
+                }
+            }
         }
-        scheduleSave()
+    }
+
+    private func uniqueLakes(_ lakes: [BathingWater]) -> [BathingWater] {
+        var seen: Set<String> = []
+        var result: [BathingWater] = []
+        result.reserveCapacity(lakes.count)
+
+        for lake in lakes where !seen.contains(lake.id) {
+            seen.insert(lake.id)
+            result.append(lake)
+        }
+        return result
     }
 
     // MARK: - Nonisolated Network Fetch
@@ -132,6 +271,7 @@ final class WeatherService {
     }
 
     private func saveDiskCache() {
+        let now = Date()
         var serializable: [String: [String: Any]] = [:]
         for (key, w) in weatherCache {
             var dict: [String: Any] = [:]
@@ -146,12 +286,14 @@ final class WeatherService {
             serializable[key] = dict
         }
         let payload: [String: Any] = [
-            "timestamp": Date().timeIntervalSinceReferenceDate,
+            "timestamp": now.timeIntervalSinceReferenceDate,
             "data": serializable
         ]
         if let data = try? JSONSerialization.data(withJSONObject: payload) {
             try? data.write(to: Self.cacheFileURL, options: .atomic)
         }
+        cacheTimestamp = now
+        isUsingStaleCache = false
     }
 
     private func loadDiskCache() {
@@ -161,8 +303,7 @@ final class WeatherService {
               let dict = json["data"] as? [String: [String: Any]]
         else { return }
 
-        let age = Date().timeIntervalSinceReferenceDate - timestamp
-        guard age < cacheTTL else { return }
+        cacheTimestamp = Date(timeIntervalSinceReferenceDate: timestamp)
 
         for (key, d) in dict {
             weatherCache[key] = LakeWeather(
@@ -176,6 +317,8 @@ final class WeatherService {
                 weatherCode: d["weatherCode"] as? Int
             )
         }
+        cacheRevision &+= 1
+        isUsingStaleCache = !isCacheFresh
     }
 
     private static var cacheFileURL: URL {

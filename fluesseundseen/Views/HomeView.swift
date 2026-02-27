@@ -15,12 +15,9 @@ struct HomeView: View {
     @State private var showSettings = false
     @FocusState private var isSearchFocused: Bool
 
-    // Filters
-    @State private var selectedQuality: String?
-    @State private var selectedScoreFilter: ScoreFilter?
-
     // Sort
     @State private var sortOption: SortOption = .bestScore
+    @State private var sortDirection: SortDirection = .descending
 
     // Recent lakes
     @State private var recentLakes: [RecentLake] = []
@@ -34,19 +31,35 @@ struct HomeView: View {
     @State private var cachedAverageScore: SwimScore? = nil
     @State private var visibleCount: Int = 20        // progressive pagination
     @State private var updateTask: Task<Void, Never>?
+    @State private var sectionsVisible = false
+
+    private struct NearbyPick: Identifiable {
+        let lake: BathingWater
+        let distanceKm: Double
+        let score: SwimScore
+        var id: String { lake.id }
+    }
 
     // MARK: - Sort / Filter Enums
 
     enum SortOption: String, CaseIterable {
-        case bestScore, nearest, warmest, coldest, alphabetical
+        case bestScore, nearest, alphabetical, airTemperature, waterTemperature
+
+        static let displayOrder: [SortOption] = [
+            .bestScore,
+            .nearest,
+            .alphabetical,
+            .airTemperature,
+            .waterTemperature
+        ]
 
         var label: String {
             switch self {
             case .bestScore:    return "Bester Score"
-            case .nearest:      return "Nächste"
-            case .warmest:      return "Wärmstes Wasser"
-            case .coldest:      return "Kältestes Wasser"
+            case .nearest:      return "Entfernung"
             case .alphabetical: return "A–Z"
+            case .airTemperature: return "Lufttemperatur"
+            case .waterTemperature: return "Wassertemperatur"
             }
         }
 
@@ -54,45 +67,75 @@ struct HomeView: View {
             switch self {
             case .bestScore:    return "star.fill"
             case .nearest:      return "location.fill"
-            case .warmest:      return "flame.fill"
-            case .coldest:      return "snowflake"
             case .alphabetical: return "textformat.abc"
+            case .airTemperature: return "sun.max.fill"
+            case .waterTemperature: return "drop.fill"
+            }
+        }
+
+        var defaultDirection: SortDirection {
+            switch self {
+            case .nearest, .alphabetical: return .ascending
+            case .bestScore, .airTemperature, .waterTemperature: return .descending
             }
         }
     }
 
-    enum ScoreFilter: String, CaseIterable {
-        case perfekt, gut
+    enum SortDirection {
+        case ascending
+        case descending
 
-        var label: String { self == .perfekt ? "Perfekt" : "Gut+" }
-        var icon: String  { self == .perfekt ? "star.fill" : "hand.thumbsup.fill" }
-        var color: Color  { self == .perfekt ? AppTheme.scorePerfekt : AppTheme.scoreGut }
-        var minScore: Double { self == .perfekt ? 8.0 : 6.0 }
+        var symbol: String {
+            switch self {
+            case .ascending: return "arrow.up"
+            case .descending: return "arrow.down"
+            }
+        }
+
+        mutating func toggle() {
+            self = self == .ascending ? .descending : .ascending
+        }
     }
 
     // MARK: - Inexpensive Computed Properties (no weatherCache access)
 
-    private var nearbyLakes: [BathingWater] {
-        guard let loc = locationService.userLocation else { return [] }
-        // Pre-compute distances once, sort once — avoids CLLocation allocation per comparison
-        return dataService.lakes
-            .map { ($0, $0.distance(from: loc)) }
+    private var topNearbyPicks: [NearbyPick] {
+        guard let userLocation = locationService.userLocation else { return [] }
+        let nearest = dataService.lakes
+            .map { ($0, $0.distance(from: userLocation)) }
             .sorted { $0.1 < $1.1 }
-            .prefix(20)
-            .map { $0.0 }
+            .prefix(5)
+
+        let weatherCache = weatherService.weatherCache
+        return nearest
+            .map { entry in
+                NearbyPick(
+                    lake: entry.0,
+                    distanceKm: entry.1,
+                    score: entry.0.swimScore(weather: weatherCache[entry.0.id])
+                )
+            }
+            .sorted { $0.score.total > $1.score.total }
     }
 
     private var isSearchActive: Bool {
-        !searchText.isEmpty || selectedQuality != nil || selectedScoreFilter != nil
+        !searchText.isEmpty
     }
 
     private var activeFilterCount: Int {
-        (selectedQuality != nil ? 1 : 0) +
-        (selectedScoreFilter != nil ? 1 : 0) +
         (selectedState != nil ? 1 : 0)
     }
 
     private var season: Season { .current }
+    private var hasCompleteWeatherCoverage: Bool {
+        weatherService.hasCompleteWeather(for: dataService.lakes)
+    }
+    private var shouldBlockForWeather: Bool {
+        !dataService.isLoading && !dataService.lakes.isEmpty && !hasCompleteWeatherCoverage
+    }
+    private var weatherMissingCount: Int {
+        dataService.lakes.filter { weatherService.weatherCache[$0.id] == nil }.count
+    }
 
     private var heroState: DuckState {
         if dataService.isLoading { return .zufrieden }
@@ -116,6 +159,12 @@ struct HomeView: View {
 
         let total = dataService.lakes.count
         if total == 0 { return "Entdecke Österreichs schönste Badegewässer!" }
+        if shouldBlockForWeather {
+            return "Ducky lädt Wetterdaten für alle \(total) Seen…"
+        }
+        if weatherService.isUsingStaleCache {
+            return "Rankings sind sofort da. Ducky aktualisiert Wetter live im Hintergrund."
+        }
 
         if let avg = cachedAverageScore {
             let good = cachedGoodScoreCount
@@ -150,30 +199,39 @@ struct HomeView: View {
             if let state = selectedState {
                 lakes = lakes.filter { $0.state == state }
             }
-            if let quality = selectedQuality {
-                lakes = lakes.filter { $0.qualityRating?.uppercased() == quality }
-            }
-            if let scoreFilter = selectedScoreFilter {
-                lakes = lakes.filter {
-                    $0.swimScore(weather: cache[$0.id]).total >= scoreFilter.minScore
-                }
-            }
             switch sortOption {
             case .bestScore:
                 lakes.sort { a, b in
-                    a.swimScore(weather: cache[a.id]).total > b.swimScore(weather: cache[b.id]).total
+                    let lhs = a.swimScore(weather: cache[a.id]).total
+                    let rhs = b.swimScore(weather: cache[b.id]).total
+                    return sortDirection == .ascending ? lhs < rhs : lhs > rhs
                 }
             case .nearest:
                 if let loc = locationService.userLocation {
                     let distances = Dictionary(uniqueKeysWithValues: lakes.map { ($0.id, $0.distance(from: loc)) })
-                    lakes.sort { (distances[$0.id] ?? .infinity) < (distances[$1.id] ?? .infinity) }
+                    lakes.sort {
+                        let lhs = distances[$0.id] ?? .infinity
+                        let rhs = distances[$1.id] ?? .infinity
+                        return sortDirection == .ascending ? lhs < rhs : lhs > rhs
+                    }
                 }
-            case .warmest:
-                lakes.sort { ($0.waterTemperature ?? -999) > ($1.waterTemperature ?? -999) }
-            case .coldest:
-                lakes.sort { ($0.waterTemperature ?? 999) < ($1.waterTemperature ?? 999) }
             case .alphabetical:
-                lakes.sort { $0.name.localizedCompare($1.name) == .orderedAscending }
+                lakes.sort {
+                    let cmp = $0.name.localizedCompare($1.name)
+                    return sortDirection == .ascending ? cmp == .orderedAscending : cmp == .orderedDescending
+                }
+            case .airTemperature:
+                lakes.sort {
+                    let lhs = cache[$0.id]?.airTemperature ?? -999
+                    let rhs = cache[$1.id]?.airTemperature ?? -999
+                    return sortDirection == .ascending ? lhs < rhs : lhs > rhs
+                }
+            case .waterTemperature:
+                lakes.sort {
+                    let lhs = $0.currentWaterTemperature ?? -999
+                    let rhs = $1.currentWaterTemperature ?? -999
+                    return sortDirection == .ascending ? lhs < rhs : lhs > rhs
+                }
             }
 
             displayTotalCount = lakes.count
@@ -201,7 +259,11 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppTheme.pageBackground
+                AppTheme.pageGradient
+                    .ignoresSafeArea()
+
+                BubbleBackground(color: AppTheme.skyBlue)
+                    .opacity(0.40)
                     .ignoresSafeArea()
 
                 ScrollView(.vertical, showsIndicators: false) {
@@ -216,6 +278,11 @@ struct HomeView: View {
                 .refreshable {
                     await dataService.refresh()
                     Haptics.success()
+                }
+
+                if shouldBlockForWeather {
+                    weatherHydrationOverlay
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
             .navigationTitle("Entdecken")
@@ -249,32 +316,27 @@ struct HomeView: View {
 
             // Populate display immediately after data loads (no debounce)
             updateDisplayLakes(debounce: false)
-
-            // Prefetch weather for the first visible page
-            let prefetchTargets = Array((displayLakes.isEmpty ? dataService.lakes : displayLakes).prefix(30))
-            await weatherService.prefetchWeather(for: prefetchTargets)
-
-            // Re-sort with fresh weather scores
+            await weatherService.bootstrapWeather(for: dataService.lakes)
             updateDisplayLakes(debounce: false)
         }
         // React to filter/sort/data changes — reset pagination on most changes
         .onChange(of: dataService.lakes) {
             visibleCount = 20
             updateDisplayLakes(debounce: false)
+            Task {
+                await weatherService.bootstrapWeather(for: dataService.lakes)
+                updateDisplayLakes(debounce: false)
+            }
         }
         .onChange(of: sortOption) {
             visibleCount = 20
             updateDisplayLakes(debounce: false)
         }
+        .onChange(of: sortDirection) {
+            visibleCount = 20
+            updateDisplayLakes(debounce: false)
+        }
         .onChange(of: selectedState) {
-            visibleCount = 20
-            updateDisplayLakes(debounce: false)
-        }
-        .onChange(of: selectedQuality) {
-            visibleCount = 20
-            updateDisplayLakes(debounce: false)
-        }
-        .onChange(of: selectedScoreFilter) {
             visibleCount = 20
             updateDisplayLakes(debounce: false)
         }
@@ -284,8 +346,63 @@ struct HomeView: View {
             updateDisplayLakes(debounce: true)
         }
         // Weather updates are debounced — coalesces many individual lake fetches
-        .onChange(of: weatherService.weatherCache.count) {
+        .onChange(of: weatherService.cacheRevision) {
             updateDisplayLakes(debounce: true)
+        }
+        .onAppear {
+            guard !sectionsVisible else { return }
+            withAnimation(AppTheme.entranceSpring) {
+                sectionsVisible = true
+            }
+        }
+    }
+
+    private var weatherHydrationOverlay: some View {
+        ZStack {
+            Rectangle()
+                .fill(.black.opacity(0.2))
+                .ignoresSafeArea()
+
+            VStack(spacing: 14) {
+                DuckView(state: .zufrieden, size: 96)
+
+                Text("Score wird vorbereitet")
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+
+                Text("Wetter für \(weatherService.hydrationCompleted)/\(max(weatherService.hydrationTotal, dataService.lakes.count)) Seen geladen")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+
+                ProgressView(value: weatherService.hydrationProgress)
+                    .progressViewStyle(.linear)
+                    .tint(AppTheme.oceanBlue)
+                    .padding(.horizontal, 10)
+
+                if !weatherService.isHydratingAll && weatherMissingCount > 0 {
+                    Button {
+                        Task {
+                            await weatherService.hydrateAllWeather(for: dataService.lakes, forceRefresh: false)
+                            updateDisplayLakes(debounce: false)
+                        }
+                    } label: {
+                        Text("Erneut versuchen")
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(AppTheme.oceanBlue, in: Capsule())
+                    }
+                }
+            }
+            .padding(22)
+            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(AppTheme.divider, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.2), radius: 20, y: 8)
+            .padding(.horizontal, 24)
         }
     }
 
@@ -303,11 +420,6 @@ struct HomeView: View {
             )
             .padding(.horizontal, 16)
             .shadow(color: season.heroGradientColors.last?.opacity(0.25) ?? AppTheme.oceanBlue.opacity(0.2), radius: 20, y: 10)
-
-            WaterWaveView(baseColor: season.waveColor, height: 35, speed: 0.8)
-                .frame(height: 35)
-                .offset(y: 15)
-                .padding(.horizontal, 16)
 
             VStack(spacing: 10) {
                 ZStack {
@@ -354,7 +466,7 @@ struct HomeView: View {
         }
         .padding(.bottom, 12)
         .onAppear {
-            withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
                 heroAppear = true
             }
         }
@@ -365,6 +477,9 @@ struct HomeView: View {
     private var contentSections: some View {
         VStack(spacing: isSearchActive ? 16 : 28) {
             searchBar
+                .opacity(sectionsVisible ? 1 : 0)
+                .offset(y: sectionsVisible ? 0 : 12)
+                .animation(AppTheme.entranceSpring.delay(0.04), value: sectionsVisible)
 
             // Recent lakes shown when search is focused but empty
             if isSearchFocused && searchText.isEmpty && !recentLakes.isEmpty && !isSearchActive {
@@ -373,24 +488,34 @@ struct HomeView: View {
 
             if isSearchActive {
                 searchFilters
+                    .opacity(sectionsVisible ? 1 : 0)
+                    .offset(y: sectionsVisible ? 0 : 10)
+                    .animation(AppTheme.entranceSpring.delay(0.10), value: sectionsVisible)
                 allLakesSection
+                    .opacity(sectionsVisible ? 1 : 0)
+                    .offset(y: sectionsVisible ? 0 : 10)
+                    .animation(AppTheme.entranceSpring.delay(0.14), value: sectionsVisible)
             } else {
                 statsRow
+                    .opacity(sectionsVisible ? 1 : 0)
+                    .offset(y: sectionsVisible ? 0 : 10)
+                    .animation(AppTheme.entranceSpring.delay(0.08), value: sectionsVisible)
 
                 if locationService.isAuthorized {
-                    lakeSection(
-                        title: "In deiner Nähe",
-                        icon: "location.fill",
-                        iconColor: AppTheme.oceanBlue,
-                        lakes: nearbyLakes,
-                        showDistance: true
-                    )
+                    nearbyTopScoreSection
+                        .opacity(sectionsVisible ? 1 : 0)
+                        .offset(y: sectionsVisible ? 0 : 10)
+                        .animation(AppTheme.entranceSpring.delay(0.13), value: sectionsVisible)
                 }
 
                 WaveDivider(color: AppTheme.teal, height: 24)
-                    .padding(.horizontal, 16)
+                    .opacity(sectionsVisible ? 1 : 0)
+                    .animation(AppTheme.smoothEase.delay(0.16), value: sectionsVisible)
 
                 allLakesSection
+                    .opacity(sectionsVisible ? 1 : 0)
+                    .offset(y: sectionsVisible ? 0 : 10)
+                    .animation(AppTheme.entranceSpring.delay(0.18), value: sectionsVisible)
                 dataAttributionFooter
             }
         }
@@ -401,28 +526,6 @@ struct HomeView: View {
 
     private var searchFilters: some View {
         VStack(spacing: 10) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    filterChip(label: "Ausgezeichnet", icon: "checkmark.seal.fill", iconColor: AppTheme.freshGreen, isSelected: selectedQuality == "A") {
-                        withAnimation(AppTheme.quickSpring) { selectedQuality = selectedQuality == "A" ? nil : "A" }
-                    }
-                    filterChip(label: "Gut", icon: "hand.thumbsup.fill", iconColor: AppTheme.teal, isSelected: selectedQuality == "G") {
-                        withAnimation(AppTheme.quickSpring) { selectedQuality = selectedQuality == "G" ? nil : "G" }
-                    }
-
-                    Rectangle()
-                        .fill(AppTheme.divider)
-                        .frame(width: 1, height: 20)
-
-                    ForEach(ScoreFilter.allCases, id: \.rawValue) { filter in
-                        filterChip(label: filter.label, icon: filter.icon, iconColor: filter.color, isSelected: selectedScoreFilter == filter) {
-                            withAnimation(AppTheme.quickSpring) { selectedScoreFilter = selectedScoreFilter == filter ? nil : filter }
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-
             if !dataService.availableStates.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -448,8 +551,6 @@ struct HomeView: View {
                     Spacer()
                     Button {
                         withAnimation(AppTheme.quickSpring) {
-                            selectedQuality = nil
-                            selectedScoreFilter = nil
                             selectedState = nil
                         }
                     } label: {
@@ -482,8 +583,6 @@ struct HomeView: View {
                 Button {
                     withAnimation(AppTheme.quickSpring) {
                         searchText = ""
-                        selectedQuality = nil
-                        selectedScoreFilter = nil
                         selectedState = nil
                     }
                 } label: {
@@ -494,8 +593,13 @@ struct HomeView: View {
             }
         }
         .padding(14)
-        .background(AppTheme.searchBarBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+        .background(AppTheme.searchBarBackground.opacity(0.98), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(AppTheme.cardStroke.opacity(0.75), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
+        .shadow(color: AppTheme.glowOverlay.opacity(0.08), radius: 2, y: 1)
         .padding(.horizontal, 20)
     }
 
@@ -534,29 +638,42 @@ struct HomeView: View {
     // MARK: - Stats Row
 
     private var statsRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                statChip(
-                    icon: "drop.fill",
-                    value: "\(dataService.lakes.count)",
-                    label: "Gewässer",
-                    color: AppTheme.oceanBlue
-                )
-                statChip(
-                    icon: "star.fill",
-                    value: "\(cachedGoodScoreCount)",
-                    label: "Guter Score",
-                    color: AppTheme.scoreGut
-                )
-                statChip(
-                    icon: "checkmark.seal.fill",
-                    value: "\(dataService.lakes.filter { $0.qualityRating?.uppercased() == "A" }.count)",
-                    label: "Top Qualität",
-                    color: AppTheme.freshGreen
-                )
-            }
-            .padding(.horizontal, 20)
+        HStack(spacing: 12) {
+            statChip(
+                icon: "drop.fill",
+                value: "\(dataService.lakes.count)",
+                label: "Gewässer",
+                color: AppTheme.oceanBlue
+            )
+            .opacity(sectionsVisible ? 1 : 0)
+            .scaleEffect(sectionsVisible ? 1 : 0.92)
+            .offset(y: sectionsVisible ? 0 : 8)
+            .animation(AppTheme.entranceSpring.delay(0.08), value: sectionsVisible)
+
+            statChip(
+                icon: "star.fill",
+                value: "\(cachedGoodScoreCount)",
+                label: "Guter Score",
+                color: AppTheme.scoreGut
+            )
+            .opacity(sectionsVisible ? 1 : 0)
+            .scaleEffect(sectionsVisible ? 1 : 0.92)
+            .offset(y: sectionsVisible ? 0 : 8)
+            .animation(AppTheme.entranceSpring.delay(0.12), value: sectionsVisible)
+
+            statChip(
+                icon: "checkmark.seal.fill",
+                value: "\(dataService.lakes.filter { $0.qualityRating?.uppercased() == "A" }.count)",
+                label: "Top Qualität",
+                color: AppTheme.freshGreen
+            )
+            .opacity(sectionsVisible ? 1 : 0)
+            .scaleEffect(sectionsVisible ? 1 : 0.92)
+            .offset(y: sectionsVisible ? 0 : 8)
+            .animation(AppTheme.entranceSpring.delay(0.16), value: sectionsVisible)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 20)
     }
 
     private func statChip(icon: String, value: String, label: String, color: Color) -> some View {
@@ -575,58 +692,83 @@ struct HomeView: View {
         .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    // MARK: - Lake Section (horizontal scroll)
-
-    private func lakeSection(
-        title: String,
-        icon: String,
-        iconColor: Color,
-        lakes: [BathingWater],
-        showDistance: Bool
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private var nearbyTopScoreSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: icon)
+                Image(systemName: "sparkles")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(iconColor)
-                Text(title)
+                    .foregroundStyle(AppTheme.sunshine)
+                Text("Top 5 in deiner Nähe")
                     .font(AppTheme.sectionTitle)
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
+                Text("nach Score")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(AppTheme.cardBackground.opacity(0.8), in: Capsule())
             }
             .padding(.horizontal, 20)
 
-            if dataService.isLoading {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 14) {
-                        ForEach(0..<4, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
-                                .fill(AppTheme.divider)
-                                .frame(width: 200, height: 160)
-                                .shimmer()
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-            } else if lakes.isEmpty {
-                Text("Keine Daten verfügbar")
+            if topNearbyPicks.isEmpty {
+                Text("Lade nahe Gewässer…")
                     .font(AppTheme.bodyText)
                     .foregroundStyle(AppTheme.textSecondary)
                     .padding(.horizontal, 20)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 14) {
-                        ForEach(lakes) { lake in
-                            LakeCard(
-                                lake: lake,
-                                distanceKm: showDistance ? locationService.userLocation.map { lake.distance(from: $0) } : nil
-                            )
-                            .onTapGesture { selectedLake = lake }
-                            .contextMenu { lakeContextMenu(lake) }
+                VStack(spacing: 0) {
+                    ForEach(Array(topNearbyPicks.enumerated()), id: \.element.id) { index, pick in
+                        Button { selectedLake = pick.lake } label: {
+                            HStack(spacing: 12) {
+                                Text("#\(index + 1)")
+                                    .font(.system(size: 12, weight: .heavy, design: .rounded))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 24, height: 24)
+                                    .background(AppTheme.oceanBlue, in: Circle())
+
+                                SwimScoreBadge(score: pick.score, size: .medium)
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(pick.lake.name)
+                                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                                        .foregroundStyle(AppTheme.textPrimary)
+                                        .lineLimit(1)
+
+                                    HStack(spacing: 4) {
+                                        if let municipality = pick.lake.municipality {
+                                            Text(municipality)
+                                                .lineLimit(1)
+                                        }
+                                        Text("·")
+                                        Text(String(format: "%.1f km", pick.distanceKm))
+                                    }
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu { lakeContextMenu(pick.lake) }
+
+                        if index < topNearbyPicks.count - 1 {
+                            Divider()
+                                .padding(.leading, 54)
                         }
                     }
-                    .padding(.horizontal, 20)
                 }
+                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
+                .shadow(color: .black.opacity(0.05), radius: 14, y: 5)
+                .padding(.horizontal, 16)
             }
         }
     }
@@ -643,32 +785,61 @@ struct HomeView: View {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppTheme.teal)
-                    Text("Alle Gewässer")
+                    Text("Gewässer")
                         .font(AppTheme.sectionTitle)
                         .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
                     Spacer()
 
                     Menu {
-                        ForEach(SortOption.allCases, id: \.rawValue) { option in
+                        ForEach(SortOption.displayOrder, id: \.rawValue) { option in
                             Button {
-                                withAnimation(AppTheme.quickSpring) { sortOption = option }
+                                withAnimation(AppTheme.quickSpring) {
+                                    if sortOption == option {
+                                        sortDirection.toggle()
+                                    } else {
+                                        sortOption = option
+                                        sortDirection = option.defaultDirection
+                                    }
+                                }
                                 Haptics.light()
                             } label: {
-                                Label(option.label, systemImage: option.icon)
+                                HStack {
+                                    Label(option.label, systemImage: option.icon)
+                                    if sortOption == option {
+                                        Image(systemName: sortDirection.symbol)
+                                            .font(.system(size: 10, weight: .bold))
+                                    }
+                                }
                             }
                             .disabled(option == .nearest && locationService.userLocation == nil)
                         }
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: sortOption.icon)
-                                .font(.system(size: 11, weight: .semibold))
-                            Text(sortOption.label)
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        ViewThatFits {
+                            HStack(spacing: 4) {
+                                Image(systemName: sortOption.icon)
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text(sortOption.label)
+                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .lineLimit(1)
+                                Image(systemName: sortDirection.symbol)
+                                    .font(.system(size: 10, weight: .bold))
+                            }
+                            .foregroundStyle(AppTheme.oceanBlue)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(AppTheme.oceanBlue.opacity(0.1), in: Capsule())
+
+                            HStack(spacing: 2) {
+                                Image(systemName: sortOption.icon)
+                                    .font(.system(size: 11, weight: .bold))
+                                Image(systemName: sortDirection.symbol)
+                                    .font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundStyle(AppTheme.oceanBlue)
+                            .frame(width: 34, height: 28)
+                            .background(AppTheme.oceanBlue.opacity(0.1), in: Capsule())
                         }
-                        .foregroundStyle(AppTheme.oceanBlue)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(AppTheme.oceanBlue.opacity(0.1), in: Capsule())
                     }
 
                     Text("\(displayTotalCount)")
@@ -718,6 +889,17 @@ struct HomeView: View {
             .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
             .shadow(color: .black.opacity(0.04), radius: 12, y: 4)
             .padding(.horizontal, 16)
+
+            if !visibleLakes.isEmpty {
+                HStack(spacing: 5) {
+                    Image(systemName: "hand.tap.fill")
+                        .font(.system(size: 10))
+                    Text("Lange drücken zum Teilen, als Favorit hinzufügen und Route berechnen.")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                }
+                .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
+                .padding(.horizontal, 20)
+            }
 
             // Progressive "load more" — adds 20 at a time rather than dumping all at once
             if displayTotalCount > visibleCount {
@@ -871,4 +1053,13 @@ struct HomeView: View {
         .environment(LocationService.shared)
         .environment(WeatherService.shared)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
+}
+
+#Preview("Dark Mode") {
+    HomeView()
+        .environment(DataService.shared)
+        .environment(LocationService.shared)
+        .environment(WeatherService.shared)
+        .modelContainer(for: FavouriteItem.self, inMemory: true)
+        .preferredColorScheme(.dark)
 }

@@ -169,6 +169,23 @@ struct BathingWater: Identifiable, Hashable {
         waterTemperature != nil
     }
 
+    /// Compact state label for dense list UIs.
+    var shortStateLabel: String? {
+        guard let state, !state.isEmpty else { return nil }
+        switch state {
+        case "Burgenland": return "B"
+        case "Kärnten": return "K"
+        case "Niederösterreich": return "NÖ"
+        case "Oberösterreich": return "OÖ"
+        case "Salzburg": return "S"
+        case "Steiermark": return "ST"
+        case "Tirol": return "T"
+        case "Vorarlberg": return "V"
+        case "Wien": return "W"
+        default: return state
+        }
+    }
+
     var temperatureColor: Color {
         guard let temp = waterTemperature else { return .gray }
         if temp > 22 { return AppTheme.coral }
@@ -233,7 +250,7 @@ enum TrafficLight {
 // MARK: - JSON Decoding (AGES nested format)
 
 extension BathingWater {
-    static func decode(from dict: [String: Any], state: String? = nil) -> BathingWater? {
+    nonisolated static func decode(from dict: [String: Any], state: String? = nil) -> BathingWater? {
         func string(_ keys: String...) -> String? {
             for key in keys {
                 if let v = dict[key] as? String, !v.isEmpty { return v }

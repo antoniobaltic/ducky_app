@@ -85,7 +85,7 @@ final class DataService {
 
     // MARK: - Async Parsing (always off MainActor via Task.detached)
 
-    private static func parseAsync(data: Data) async throws -> [BathingWater] {
+    nonisolated private static func parseAsync(data: Data) async throws -> [BathingWater] {
         try await Task.detached(priority: .userInitiated) {
             try Self.parse(data: data)
         }.value
@@ -93,10 +93,8 @@ final class DataService {
 
     // MARK: - Parsing (AGES nested format) — static so it's safe in Task.detached
 
-    private static func parse(data: Data) throws -> [BathingWater] {
-        guard let json = try JSONSerialization.jsonObject(with: data) as? Any else {
-            throw DataError.invalidFormat
-        }
+    nonisolated private static func parse(data: Data) throws -> [BathingWater] {
+        let json = try JSONSerialization.jsonObject(with: data)
 
         var allEntries: [BathingWater] = []
 

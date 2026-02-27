@@ -1,10 +1,15 @@
 import SwiftUI
+import CoreLocation
+#if os(iOS)
+import UIKit
+#endif
 
 struct OnboardingView: View {
     @Binding var hasCompletedOnboarding: Bool
     @State private var currentPage = 0
     @State private var appear = false
     @Environment(LocationService.self) private var locationService
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ZStack {
@@ -230,17 +235,29 @@ struct OnboardingView: View {
 
                 if !locationService.isAuthorized {
                     Button {
-                        locationService.requestPermission()
+                        if locationService.authorizationStatus == .denied || locationService.authorizationStatus == .restricted {
+                            openAppSettings()
+                        } else {
+                            locationService.requestPermission()
+                        }
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "location.fill")
-                            Text("Standort freigeben")
+                            Image(systemName: locationService.authorizationStatus == .denied || locationService.authorizationStatus == .restricted ? "gearshape.fill" : "location.fill")
+                            Text(locationService.authorizationStatus == .denied || locationService.authorizationStatus == .restricted ? "Einstellungen öffnen" : "Standort freigeben")
                         }
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundStyle(AppTheme.oceanBlue)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
                         .background(AppTheme.oceanBlue.opacity(0.12), in: Capsule())
+                    }
+
+                    if locationService.authorizationStatus == .denied || locationService.authorizationStatus == .restricted {
+                        Text("Standortzugriff ist deaktiviert. Aktiviere ihn in den Einstellungen.")
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
                     }
                 } else {
                     HStack(spacing: 8) {
@@ -263,6 +280,13 @@ struct OnboardingView: View {
                 .frame(height: 35)
                 .opacity(0.35)
         }
+    }
+
+    private func openAppSettings() {
+#if os(iOS)
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(url)
+#endif
     }
 }
 

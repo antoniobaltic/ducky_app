@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import UserNotifications
 
 struct FavouritesView: View {
     @Environment(DataService.self) private var dataService
@@ -20,7 +19,11 @@ struct FavouritesView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppTheme.pageBackground
+                AppTheme.pageGradient
+                    .ignoresSafeArea()
+
+                BubbleBackground(color: AppTheme.warmPink)
+                    .opacity(0.32)
                     .ignoresSafeArea()
 
                 if favourites.isEmpty {
@@ -28,6 +31,8 @@ struct FavouritesView: View {
                 } else {
                     ScrollView {
                         VStack(spacing: 0) {
+                            favouritesHero
+
                             // Subtle wave header
                             WaveDivider(color: AppTheme.warmPink, height: 20)
                                 .opacity(0.5)
@@ -67,6 +72,29 @@ struct FavouritesView: View {
         }
     }
 
+    private var favouritesHero: some View {
+        HStack(spacing: 12) {
+            DuckView(state: .begeistert, size: 48)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Deine Bade-Favoriten")
+                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text("\(favourites.count) gespeichert")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+
+            Spacer()
+        }
+        .padding(16)
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+    }
+
     // MARK: - Empty State
 
     private var emptyState: some View {
@@ -97,7 +125,7 @@ struct FavouritesView: View {
                         .font(.system(size: 24, weight: .heavy, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
 
-                    Text("Tippe auf das Herz bei einem See,\num ihn hier zu speichern.")
+                    Text("Füge einen See zu deinen Favoriten hinzu,\num ihn hier zu sehen!")
                         .font(AppTheme.bodyText)
                         .foregroundStyle(AppTheme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -120,6 +148,9 @@ struct FavouritesView: View {
         let temp = live?.waterTemperature ?? fav.lastKnownTemperature
         let quality = live?.qualityRating ?? fav.lastKnownQuality
         let duckState = live?.duckState ?? .zufrieden
+        let distanceKm = live.flatMap { lake in
+            locationService.userLocation.map { lake.distance(from: $0) }
+        }
 
         return NavigationLink(destination: destinationView(for: fav)) {
             FavouriteRowContent(
@@ -128,7 +159,7 @@ struct FavouritesView: View {
                 quality: quality,
                 duckState: duckState,
                 live: live,
-                toggleNotifications: { toggleNotifications(for: fav) }
+                distanceKm: distanceKm
             )
         }
         .buttonStyle(.plain)
@@ -158,40 +189,6 @@ struct FavouritesView: View {
         }
     }
 
-    // MARK: - Notifications
-
-    private func toggleNotifications(for fav: FavouriteItem) {
-        if fav.notificationsEnabled {
-            fav.notificationsEnabled = false
-            removeNotification(for: fav)
-        } else {
-            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-                if granted {
-                    DispatchQueue.main.async {
-                        fav.notificationsEnabled = true
-                        scheduleNotification(for: fav)
-                    }
-                }
-            }
-        }
-    }
-
-    private func scheduleNotification(for fav: FavouriteItem) {
-        guard let temp = fav.lastKnownTemperature, temp >= 20 else { return }
-        let content = UNMutableNotificationContent()
-        content.title = fav.lakeName
-        content.body = String(format: "%.1f°C erreicht! Ducky sagt: Spring rein!", temp)
-        content.sound = .default
-
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 60 * 60 * 8, repeats: true)
-        let request = UNNotificationRequest(identifier: fav.lakeID, content: content, trigger: trigger)
-        UNUserNotificationCenter.current().add(request)
-    }
-
-    private func removeNotification(for fav: FavouriteItem) {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [fav.lakeID])
-    }
-
 }
 
 // MARK: - Extracted row content to support weather fetching
@@ -202,10 +199,11 @@ private struct FavouriteRowContent: View {
     let quality: String?
     let duckState: DuckState
     let live: BathingWater?
-    let toggleNotifications: () -> Void
+    let distanceKm: Double?
 
     @Environment(WeatherService.self) private var weatherService
     @State private var weather: LakeWeather?
+    @State private var appear = false
 
     private var score: SwimScore {
         if let live {
@@ -215,86 +213,129 @@ private struct FavouriteRowContent: View {
     }
 
     var body: some View {
-        HStack(spacing: 14) {
-            SwimScoreBadge(score: score, size: .medium)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(fav.lakeName)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
-
-                if let municipality = fav.municipalityName {
-                    Text(municipality)
-                        .font(AppTheme.caption)
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-
-                if let q = quality {
-                    let color = BathingWater.qualityColor(for: q)
-                    HStack(spacing: 5) {
-                        Circle().fill(color).frame(width: 7, height: 7)
-                        Text(BathingWater.qualityLabel(for: q))
-                            .font(AppTheme.smallCaption)
-                            .foregroundStyle(AppTheme.textSecondary)
-                    }
-                }
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(duckState.accentColor.opacity(0.18))
+                    .frame(width: 44, height: 44)
+                DuckView(state: duckState, size: 34)
             }
 
-            Spacer()
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(fav.lakeName)
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
 
-            VStack(alignment: .trailing, spacing: 6) {
-                // Air temperature first
-                if let weather, let airTemp = weather.airTemperature {
-                    HStack(spacing: 3) {
-                        Image(systemName: "sun.max.fill")
-                            .font(.system(size: 10))
+                    SwimScoreBadge(score: score, size: .small)
+                }
+
+                HStack(spacing: 5) {
+                    if let municipality = fav.municipalityName {
+                        Text(municipality)
+                    }
+                    if let distanceKm {
+                        Text("·")
+                        Text(String(format: "%.1f km", distanceKm))
+                    }
+                }
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textSecondary)
+
+                HStack(spacing: 6) {
+                    if let weather, let airTemp = weather.airTemperature {
+                        tempChip(icon: "sun.max.fill", text: String(format: "%.0f°C", airTemp), color: AppTheme.coral)
+                    }
+                    if let waterTemp = live?.currentWaterTemperature ?? temp {
+                        tempChip(icon: "drop.fill", text: String(format: "%.0f°C", waterTemp), color: AppTheme.skyBlue)
+                    } else {
+                        tempChip(icon: "drop.fill", text: "Wasser –", color: AppTheme.textSecondary)
+                    }
+                    if let quality, quality.uppercased() == "AU" || quality.uppercased() == "M" {
+                        Text(BathingWater.qualityLabel(for: quality))
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.coral)
-                        Text(String(format: "%.0f°C", airTemp))
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppTheme.textPrimary)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(AppTheme.coral.opacity(0.12), in: Capsule())
                     }
                 }
-
-                // Water temperature second
-                if let waterTemp = live?.currentWaterTemperature {
-                    HStack(spacing: 3) {
-                        Image(systemName: "drop.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(AppTheme.skyBlue)
-                        Text(String(format: "%.0f°C", waterTemp))
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppTheme.textPrimary)
-                    }
-                } else {
-                    Text("Wasser: –")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-
-                Button(action: toggleNotifications) {
-                    Image(systemName: fav.notificationsEnabled ? "bell.fill" : "bell")
-                        .font(.system(size: 14))
-                        .foregroundStyle(fav.notificationsEnabled ? AppTheme.sunshine : AppTheme.textSecondary)
-                }
-                .buttonStyle(.plain)
             }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
         }
-        .padding(16)
+        .padding(14)
         .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
-        .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+        .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
+        .opacity(appear ? 1 : 0)
+        .offset(y: appear ? 0 : 10)
+        .scaleEffect(appear ? 1 : 0.98)
         .task {
             if let lake = live {
                 weather = await weatherService.fetchWeather(for: lake)
             }
         }
+        .onAppear {
+            withAnimation(AppTheme.entranceSpring.delay(Double.random(in: 0...0.08))) {
+                appear = true
+            }
+        }
+    }
+
+    private func tempChip(icon: String, text: String, color: Color) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(color)
+            Text(text)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(color.opacity(0.10), in: Capsule())
     }
 
 }
 
-#Preview {
+#Preview("Empty") {
     FavouritesView()
         .environment(DataService.shared)
         .environment(LocationService.shared)
         .environment(WeatherService.shared)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
+}
+
+#Preview("With Favorites") {
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: FavouriteItem.self, configurations: config)
+    let context = container.mainContext
+
+    let one = FavouriteItem(
+        lakeID: "preview_1",
+        lakeName: "Grundlsee",
+        municipalityName: "Bad Aussee",
+        lastKnownTemperature: 20.8,
+        lastKnownQuality: "A"
+    )
+    let two = FavouriteItem(
+        lakeID: "preview_2",
+        lakeName: "Wörthersee",
+        municipalityName: "Klagenfurt",
+        lastKnownTemperature: 23.2,
+        lastKnownQuality: "A"
+    )
+    context.insert(one)
+    context.insert(two)
+
+    return FavouritesView()
+        .environment(DataService.shared)
+        .environment(LocationService.shared)
+        .environment(WeatherService.shared)
+        .modelContainer(container)
 }

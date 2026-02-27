@@ -16,6 +16,15 @@ struct MapView: View {
         )
     )
 
+    init(initialSelectedLake: BathingWater? = nil) {
+        _selectedLake = State(initialValue: initialSelectedLake)
+    }
+
+    private func distanceToLake(_ lake: BathingWater) -> Double? {
+        guard let userLocation = locationService.userLocation else { return nil }
+        return lake.distance(from: userLocation)
+    }
+
     /// Lakes filtered to the visible map region for performance
     private var visibleLakes: [BathingWater] {
         guard let region = visibleRegion else { return dataService.lakes }
@@ -65,6 +74,9 @@ struct MapView: View {
             .navigationTitle("Karte")
             .task {
                 await dataService.loadData()
+                if let lake = selectedLake {
+                    selectedWeather = await weatherService.fetchWeather(for: lake)
+                }
             }
         }
         .onChange(of: selectedLake) { _, new in
@@ -86,108 +98,151 @@ struct MapView: View {
     // MARK: - Bottom Sheet
 
     private func lakeBottomSheet(_ lake: BathingWater) -> some View {
-        VStack(spacing: 0) {
-            // Mini wave accent at top of sheet
-            WaveDivider(color: lake.qualityColor, height: 14)
-                .clipShape(
-                    UnevenRoundedRectangle(
-                        topLeadingRadius: 24,
-                        bottomLeadingRadius: 0,
-                        bottomTrailingRadius: 0,
-                        topTrailingRadius: 24
-                    )
-                )
+        let score = lake.swimScore(weather: selectedWeather)
 
-            Capsule()
-                .fill(AppTheme.divider)
-                .frame(width: 36, height: 5)
-                .padding(.top, 6)
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Capsule()
+                    .fill(AppTheme.divider)
+                    .frame(width: 38, height: 5)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
 
-            HStack(spacing: 14) {
-                SwimScoreBadge(score: lake.swimScore(weather: selectedWeather), size: .large)
-                    .padding(.leading, 4)
+            ZStack(alignment: .topTrailing) {
+                HStack(alignment: .top, spacing: 12) {
+                    SwimScoreBadge(score: score, size: .medium)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(lake.name)
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(lake.name)
+                            .font(.system(size: 18, weight: .heavy, design: .rounded))
+                            .foregroundStyle(AppTheme.textPrimary)
+                            .lineLimit(2)
 
-                    if let municipality = lake.municipality {
                         HStack(spacing: 4) {
-                            Text(municipality)
+                            if let municipality = lake.municipality {
+                                Text(municipality)
+                                    .lineLimit(1)
+                                    .layoutPriority(1)
+                            }
                             if let state = lake.state {
                                 Text("·")
+                                    .padding(.leading, 3)
                                 Text(state)
                             }
                         }
-                        .font(AppTheme.caption)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
                     }
+                    .padding(.trailing, 38)
 
-                    HStack(spacing: 8) {
-                        if let weather = selectedWeather, let airTemp = weather.airTemperature {
-                            HStack(spacing: 3) {
-                                Image(systemName: "sun.max.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(AppTheme.coral)
-                                Text(String(format: "%.0f°C", airTemp))
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    .foregroundStyle(AppTheme.textPrimary)
-                            }
-                        }
-
-                        if let waterTemp = lake.currentWaterTemperature {
-                            HStack(spacing: 3) {
-                                Image(systemName: "drop.fill")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(AppTheme.skyBlue)
-                                Text(String(format: "%.0f°C", waterTemp))
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    .foregroundStyle(AppTheme.textPrimary)
-                            }
-                        }
-
-                        QualityBadge(qualityLabel: lake.qualityLabel, qualityColor: lake.qualityColor)
-                    }
+                    Spacer(minLength: 0)
                 }
 
-                Spacer()
-
-                VStack(spacing: 10) {
-                    Button {
-                        withAnimation(AppTheme.quickSpring) { selectedLake = nil }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .symbolRenderingMode(.hierarchical)
-                    }
-
-                    NavigationLink(destination: LakeDetailView(lake: lake)) {
-                        Image(systemName: "chevron.right.circle.fill")
-                            .font(.title2)
-                            .foregroundStyle(AppTheme.oceanBlue)
-                            .symbolRenderingMode(.hierarchical)
-                    }
+                Button {
+                    withAnimation(AppTheme.quickSpring) { selectedLake = nil }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
+                        .symbolRenderingMode(.hierarchical)
                 }
-                .padding(.trailing, 4)
+                .padding(.top, 2)
             }
-            .padding(16)
+
+            HStack(spacing: 12) {
+                if let weather = selectedWeather, let airTemp = weather.airTemperature {
+                    miniInfoChip(icon: "sun.max.fill", value: String(format: "%.0f°C", airTemp), color: AppTheme.coral)
+                } else {
+                    miniInfoChip(icon: "sun.max.fill", value: "Luft –", color: AppTheme.textSecondary)
+                }
+                if let waterTemp = lake.currentWaterTemperature {
+                    miniInfoChip(icon: "drop.fill", value: String(format: "%.0f°C", waterTemp), color: AppTheme.skyBlue)
+                } else {
+                    miniInfoChip(icon: "drop.fill", value: "Wasser –", color: AppTheme.textSecondary)
+                }
+                if let distanceKm = distanceToLake(lake) {
+                    miniInfoChip(icon: "location.fill", value: String(format: "%.1f km", distanceKm), color: AppTheme.teal)
+                }
+            }
+
+            HStack(spacing: 10) {
+                NavigationLink(destination: LakeDetailView(lake: lake)) {
+                    Label("Details", systemImage: "sparkles")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(AppTheme.oceanBlue, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+
+                Button {
+                    openInMaps(lake)
+                } label: {
+                    Label("Route", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.oceanBlue)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(AppTheme.oceanBlue.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
         }
+        .padding(16)
         .background(
             AppTheme.cardBackground
+                .overlay(
+                    LinearGradient(
+                        colors: [AppTheme.oceanBlue.opacity(0.08), .clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                )
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .shadow(color: .black.opacity(0.12), radius: 20, y: -4)
+                .shadow(color: .black.opacity(0.14), radius: 22, y: -4)
         )
         .padding(.horizontal, 16)
         .padding(.bottom, 28)
         .animation(AppTheme.springAnimation, value: selectedLake?.id)
     }
+
+    private func miniInfoChip(icon: String, value: String, color: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(color)
+            Text(value)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.10), in: Capsule())
+    }
+
+    private func openInMaps(_ lake: BathingWater) {
+        let coordinate = lake.coordinate
+        guard let url = URL(
+            string: "maps://?q=\(lake.name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? lake.name)&ll=\(coordinate.latitude),\(coordinate.longitude)"
+        ) else { return }
+        #if os(iOS)
+        UIApplication.shared.open(url)
+        #else
+        NSWorkspace.shared.open(url)
+        #endif
+    }
 }
 
 #Preview {
     MapView()
+        .environment(DataService.shared)
+        .environment(LocationService.shared)
+        .environment(WeatherService.shared)
+        .modelContainer(for: FavouriteItem.self, inMemory: true)
+}
+
+#Preview("Selected Lake Card") {
+    MapView(initialSelectedLake: .preview)
         .environment(DataService.shared)
         .environment(LocationService.shared)
         .environment(WeatherService.shared)

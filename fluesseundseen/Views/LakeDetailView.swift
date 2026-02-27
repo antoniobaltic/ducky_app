@@ -5,6 +5,7 @@ import MapKit
 struct LakeDetailView: View {
     let lake: BathingWater
     @Environment(\.modelContext) private var modelContext
+    @Environment(LocationService.self) private var locationService
     @Query var favourites: [FavouriteItem]
 
     init(lake: BathingWater) {
@@ -37,6 +38,9 @@ struct LakeDetailView: View {
         return currentScore.duckState.line
     }
 
+    private var heroTextPrimary: Color { .black.opacity(0.88) }
+    private var heroTextSecondary: Color { .black.opacity(0.70) }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -44,7 +48,12 @@ struct LakeDetailView: View {
                 contentSection
             }
         }
-        .background(AppTheme.pageBackground)
+        .background(
+            ZStack {
+                AppTheme.pageGradient
+                BubbleBackground(color: AppTheme.lightBlue).opacity(0.35)
+            }
+        )
         .ignoresSafeArea(edges: .top)
         .iOSNavigationBarInline()
         .toolbar {
@@ -105,7 +114,7 @@ struct LakeDetailView: View {
 
                     Text("\u{201E}\(heroQuote)\u{201C}")
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.textPrimary.opacity(0.8))
+                        .foregroundStyle(heroTextPrimary)
                         .italic()
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -118,7 +127,7 @@ struct LakeDetailView: View {
                 VStack(spacing: 6) {
                     Text(lake.name)
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
-                        .foregroundStyle(AppTheme.textPrimary)
+                        .foregroundStyle(heroTextPrimary)
                         .multilineTextAlignment(.center)
 
                     HStack(spacing: 6) {
@@ -131,7 +140,7 @@ struct LakeDetailView: View {
                         }
                     }
                     .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
+                    .foregroundStyle(heroTextSecondary)
 
                     if lake.isClosed {
                         HStack(spacing: 6) {
@@ -169,7 +178,7 @@ struct LakeDetailView: View {
                             }
                             Text("Luft")
                                 .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                .foregroundStyle(AppTheme.textSecondary)
+                                .foregroundStyle(heroTextSecondary)
                         }
                         .frame(maxWidth: .infinity)
                     }
@@ -192,16 +201,16 @@ struct LakeDetailView: View {
                         } else {
                             Text("Unbekannt")
                                 .font(.system(size: 20, weight: .bold, design: .rounded))
-                                .foregroundStyle(AppTheme.textSecondary)
+                                .foregroundStyle(heroTextSecondary)
                                 .padding(.vertical, 8)
                         }
                         Text("Wasser")
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundStyle(AppTheme.textSecondary)
+                            .foregroundStyle(heroTextSecondary)
                         if lake.currentWaterTemperature == nil {
                             Text("Messungen: Juni – August")
                                 .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
+                                .foregroundStyle(heroTextSecondary.opacity(0.85))
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -218,6 +227,8 @@ struct LakeDetailView: View {
 
     private var contentSection: some View {
         VStack(spacing: 16) {
+            quickConditionsCard
+
             // Score breakdown
             ScoreBreakdownView(score: currentScore)
 
@@ -245,6 +256,83 @@ struct LakeDetailView: View {
         .padding(.horizontal, 16)
         .padding(.top, 4)
         .padding(.bottom, 40)
+    }
+
+    private var quickConditionsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "water.waves")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppTheme.oceanBlue)
+                Text("Auf einen Blick")
+                    .font(AppTheme.cardTitle)
+                    .foregroundStyle(AppTheme.textPrimary)
+                Spacer()
+                DuckView(state: currentScore.duckState, size: 28)
+            }
+
+            HStack(spacing: 8) {
+                if let weather, let airTemp = weather.airTemperature {
+                    quickConditionChip(
+                        icon: "sun.max.fill",
+                        value: String(format: "%.0f°C Luft", airTemp),
+                        color: AppTheme.coral
+                    )
+                }
+                if let waterTemp = lake.currentWaterTemperature {
+                    quickConditionChip(
+                        icon: "drop.fill",
+                        value: String(format: "%.1f°C Wasser", waterTemp),
+                        color: AppTheme.skyBlue
+                    )
+                } else {
+                    quickConditionChip(
+                        icon: "drop.fill",
+                        value: "Wasser: Unbekannt",
+                        color: AppTheme.textSecondary
+                    )
+                }
+            }
+
+            HStack(spacing: 8) {
+                if let distance = locationService.userLocation.map({ lake.distance(from: $0) }) {
+                    quickConditionChip(
+                        icon: "location.fill",
+                        value: String(format: "%.1f km entfernt", distance),
+                        color: AppTheme.teal
+                    )
+                }
+                if let weather {
+                    quickConditionChip(
+                        icon: weather.conditionSymbol,
+                        value: weather.conditionDescription,
+                        color: AppTheme.sunshine,
+                        textColor: .black.opacity(0.75)
+                    )
+                }
+            }
+        }
+        .appCard()
+    }
+
+    private func quickConditionChip(
+        icon: String,
+        value: String,
+        color: Color,
+        textColor: Color = AppTheme.textPrimary
+    ) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(color)
+            Text(value)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(textColor)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(color.opacity(0.10), in: Capsule())
     }
 
     // MARK: - Season Info Banner
@@ -298,7 +386,7 @@ struct LakeDetailView: View {
                     .symbolRenderingMode(.multicolor)
             }
 
-            HStack(spacing: 0) {
+            HStack(spacing: 8) {
                 if let airTemp = weather.airTemperature {
                     weatherStat(
                         icon: "thermometer.medium",
@@ -312,7 +400,9 @@ struct LakeDetailView: View {
                         icon: "sun.max.fill",
                         value: "\(uv)",
                         label: "UV-Index",
-                        color: AppTheme.sunshine
+                        color: AppTheme.sunshine,
+                        valueColor: .black.opacity(0.78),
+                        labelColor: .black.opacity(0.66)
                     )
                 }
                 if let feels = weather.feelsLike {
@@ -325,8 +415,7 @@ struct LakeDetailView: View {
                 }
             }
 
-            // Wind & precipitation row
-            HStack(spacing: 0) {
+            HStack(spacing: 8) {
                 if let wind = weather.windSpeed {
                     weatherStat(
                         icon: "wind",
@@ -346,25 +435,43 @@ struct LakeDetailView: View {
             }
 
             Text(weather.conditionDescription)
-                .font(AppTheme.caption)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(AppTheme.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .appCard()
+        .background(
+            LinearGradient(
+                colors: [AppTheme.skyBlue.opacity(0.08), .clear],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
+        )
     }
 
-    private func weatherStat(icon: String, value: String, label: String, color: Color) -> some View {
+    private func weatherStat(
+        icon: String,
+        value: String,
+        label: String,
+        color: Color,
+        valueColor: Color = AppTheme.textPrimary,
+        labelColor: Color = AppTheme.textSecondary
+    ) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(.system(size: 16))
                 .foregroundStyle(color)
             Text(value)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundStyle(AppTheme.textPrimary)
+                .font(.system(size: 15, weight: .heavy, design: .rounded))
+                .foregroundStyle(valueColor)
             Text(label)
                 .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(AppTheme.textSecondary)
+                .foregroundStyle(labelColor)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 86)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: - Quality Card
@@ -520,14 +627,27 @@ struct LakeDetailView: View {
     // MARK: - Map Card
 
     private var mapCard: some View {
-        Map {
-            Marker(lake.name, coordinate: lake.coordinate)
-                .tint(lake.qualityColor)
+        ZStack(alignment: .topLeading) {
+            Map {
+                Marker(lake.name, coordinate: lake.coordinate)
+                    .tint(AppTheme.oceanBlue)
+            }
+            .allowsHitTesting(false)
+
+            HStack(spacing: 6) {
+                Image(systemName: "map.fill")
+                Text("Standort")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+            }
+            .foregroundStyle(AppTheme.oceanBlue)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(AppTheme.cardBackground.opacity(0.92), in: Capsule())
+            .padding(10)
         }
         .frame(height: 180)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
         .shadow(color: .black.opacity(0.06), radius: 12, y: 4)
-        .allowsHitTesting(false)
     }
 
     // MARK: - Route Button
@@ -535,7 +655,7 @@ struct LakeDetailView: View {
     private var routeButton: some View {
         Button { openInMaps() } label: {
             HStack(spacing: 8) {
-                Image(systemName: "map.fill")
+                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
                 Text("Route in Apple Maps")
                     .font(.system(size: 17, weight: .bold, design: .rounded))
             }
@@ -601,7 +721,18 @@ struct CardView<Content: View>: View {
 #Preview {
     NavigationStack {
         LakeDetailView(lake: .preview)
+            .environment(LocationService.shared)
             .environment(WeatherService.shared)
             .modelContainer(for: FavouriteItem.self, inMemory: true)
+    }
+}
+
+#Preview("Dark Mode") {
+    NavigationStack {
+        LakeDetailView(lake: .preview)
+            .environment(LocationService.shared)
+            .environment(WeatherService.shared)
+            .modelContainer(for: FavouriteItem.self, inMemory: true)
+            .preferredColorScheme(.dark)
     }
 }
