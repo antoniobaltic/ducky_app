@@ -19,11 +19,11 @@ enum DuckState: String, Equatable, CaseIterable {
 
     var line: String {
         switch self {
-        case .begeistert: return "Perfekter Badetag! Ab ins Wasser!"
-        case .zufrieden:  return "Gute Bedingungen — Ducky freut sich!"
-        case .zoegernd:   return "Geht so — vielleicht nur kurz rein?"
-        case .frierend:   return "Eher ein Tag für Kakao am Ufer."
-        case .warnend:    return "Lieber nicht ins Wasser heute!"
+        case .begeistert: return "REIN DA! Ducky dreht durch — PERFEKT!"
+        case .zufrieden:  return "Nicht schlecht! Ducky nickt anerkennend."
+        case .zoegernd:   return "Hm. Ducky ist skeptisch. Traust dich?"
+        case .frierend:   return "Gänsehaut. Als Ente. Die Ironie."
+        case .warnend:    return "Nein. Einfach nein. Ducky streikt."
         }
     }
 
@@ -39,17 +39,17 @@ enum DuckState: String, Equatable, CaseIterable {
 
     var bodyColor: Color {
         switch self {
-        case .begeistert: return Color(red: 1.0, green: 0.85, blue: 0.20)
+        case .begeistert: return Color(red: 1.00, green: 0.85, blue: 0.20)
         case .zufrieden:  return Color(red: 0.98, green: 0.82, blue: 0.30)
-        case .zoegernd:   return Color(red: 0.92, green: 0.78, blue: 0.38)
-        case .frierend:   return Color(red: 0.75, green: 0.88, blue: 1.00)
-        case .warnend:    return Color(red: 1.00, green: 0.75, blue: 0.62)
+        case .zoegernd:   return Color(red: 0.92, green: 0.80, blue: 0.38)
+        case .frierend:   return Color(red: 0.78, green: 0.86, blue: 0.96)
+        case .warnend:    return Color(red: 1.00, green: 0.78, blue: 0.55)
         }
     }
 
     var billColor: Color {
         switch self {
-        case .frierend: return Color(red: 0.80, green: 0.70, blue: 1.00)
+        case .frierend: return Color(red: 0.75, green: 0.65, blue: 0.95)
         default:        return Color(red: 1.00, green: 0.55, blue: 0.10)
         }
     }

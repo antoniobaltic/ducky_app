@@ -140,13 +140,13 @@ enum Season: String, CaseIterable {
     var heroMessage: String {
         switch self {
         case .winter:
-            return "Es ist zu kalt. Ducky friert und ist böse."
+            return "Es ist EISKALT. Ducky liegt im Bett und weigert sich."
         case .spring:
-            return "Noch zu frisch zum Baden — aber es wird! Neue Messdaten gibt es ab Juni."
+            return "Noch zu frisch. Ducky wartet ungeduldig. Neue Daten ab Juni!"
         case .summer:
             return "" // Summer uses data-driven messaging
         case .autumn:
-            return "Die Badesaison ist vorbei. Die angezeigten Temperaturen sind vom letzten Sommer."
+            return "Saison vorbei. Ducky trauert. Temperaturen sind vom letzten Sommer."
         }
     }
 

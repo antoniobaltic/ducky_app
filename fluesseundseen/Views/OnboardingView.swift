@@ -111,7 +111,7 @@ struct OnboardingView: View {
                         .font(.system(size: 34, weight: .heavy, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
 
-                    Text("Ich bin **Ducky**, dein Bade-Buddy!")
+                    Text("Ich bin **Ducky**. Ente. Bade-Experte. Legende.")
                         .font(.system(size: 18, weight: .medium, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -226,7 +226,7 @@ struct OnboardingView: View {
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
 
-                    Text("Erlaube Ducky Zugriff auf deinen\nStandort, um nahe Gewässer zu finden.")
+                    Text("Sag Ducky wo du bist.\nKeine Sorge, Ducky ist diskret. Meistens.")
                         .font(.system(size: 16, weight: .regular, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
                         .multilineTextAlignment(.center)

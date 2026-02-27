@@ -29,9 +29,9 @@ struct LakeDetailView: View {
     private var heroQuote: String {
         if lake.isTemperatureOutdated && lake.waterTemperature != nil {
             switch Season.current {
-            case .winter: return "Winterpause — Ducky wartet auf den Sommer!"
-            case .spring: return "Bald geht's wieder los!"
-            case .autumn: return "Saison vorbei — bis nächsten Sommer!"
+            case .winter: return "Winterpause. Ducky liegt im Bett. Weck mich im Juni."
+            case .spring: return "Bald! Ducky kann es kaum erwarten."
+            case .autumn: return "Saison vorbei. Ducky schmollt bis Juni."
             case .summer: return currentScore.duckState.line
             }
         }

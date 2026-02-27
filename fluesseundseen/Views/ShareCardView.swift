@@ -156,9 +156,9 @@ struct ShareCardView: View {
     private var duckQuote: String {
         if lake.isTemperatureOutdated && lake.waterTemperature != nil {
             switch Season.current {
-            case .winter: return "Winterpause — bis zum Sommer!"
-            case .spring: return "Bald geht's wieder los!"
-            case .autumn: return "Saison vorbei — bis nächstes Jahr!"
+            case .winter: return "Winterpause. Ducky schläft."
+            case .spring: return "Bald! Ducky kann es kaum erwarten."
+            case .autumn: return "Saison vorbei. Ducky schmollt."
             case .summer: return lake.duckState.line
             }
         }

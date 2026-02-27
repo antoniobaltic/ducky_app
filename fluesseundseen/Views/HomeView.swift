@@ -154,26 +154,26 @@ struct HomeView: View {
     }
 
     private var heroMessage: String {
-        if dataService.isLoading { return "Ducky checkt die Bedingungen..." }
+        if dataService.isLoading { return "Ducky schnüffelt am Wasser..." }
         if Season.isOffSeason { return season.heroMessage }
 
         let total = dataService.lakes.count
         if total == 0 { return "Entdecke Österreichs schönste Badegewässer!" }
         if shouldBlockForWeather {
-            return "Ducky lädt Wetterdaten für alle \(total) Seen…"
+            return "Ducky stalkt \(total) Seen gleichzeitig. Moment…"
         }
         if weatherService.isUsingStaleCache {
-            return "Rankings sind sofort da. Ducky aktualisiert Wetter live im Hintergrund."
+            return "Rankings stehen. Ducky checkt nochmal heimlich."
         }
 
         if let avg = cachedAverageScore {
             let good = cachedGoodScoreCount
             switch avg.level {
-            case .perfekt:  return "Perfekter Badetag! \(good) Seen mit top Bedingungen."
-            case .gut:      return "Gute Bedingungen heute! \(good) Seen laden zum Baden ein."
-            case .mittel:   return "Durchwachsen — \(good) Seen haben noch gute Bedingungen."
-            case .schlecht: return "Nicht ideal heute. Vielleicht morgen besser?"
-            case .warnung:  return "Heute eher ein Tag für drinnen."
+            case .perfekt:  return "TRAUMTAG! \(good) Seen sind quasi perfekt. Worauf wartest du?!"
+            case .gut:      return "Solide! \(good) Seen haben gute Bedingungen. Ducky ist zufrieden."
+            case .mittel:   return "Naja. \(good) Seen gehen klar — der Rest ist... mutig."
+            case .schlecht: return "Ducky empfiehlt: Couch. Heute ist nicht dein Tag."
+            case .warnung:  return "Uff. Ducky bleibt heute definitiv am Ufer."
             }
         }
 
