@@ -189,6 +189,19 @@ This document is the operational guide for future work in `fluesseundseen`.
 - Wikipedia card behavior:
   - Keep only the top-right `Browser` button in the card header.
   - Keep removed elements removed: `Sicherer Treffer` badge and bottom `Wikipedia` row/button.
+- **Gesundheit card** replaces the former separate `Wasserqualität`, `Bakteriologie`, and `Sichttiefe` cards:
+  - Header: `heart.text.clipboard.fill` icon (freshGreen) + "Gesundheit" title + quality badge on the right
+  - Wasserqualität row: quality icon + label, quality text value on right, subtle quality-color background
+  - Bakteriologie section: allergens icon + "Bakteriologie" label, "Details"/"Ausblenden" pill button; E.coli + Enterokokken TrafficLightRows below
+  - Sichttiefe row (optional, shown when `lake.visibilityDepth != nil`): eye icon, depth value, visual gradient bar
+  - Footer: measurement date on left, "AGES" attribution on right (or full attribution if no date)
+  - Card background: `freshGreen.opacity(0.07)` gradient
+  - Removed elements that must stay removed: individual Wasserqualität, Bakteriologie, Sichttiefe cards
+- **Wetter vor Ort card** reworked:
+  - Left header icon is `sun.max.fill` (multicolor) — not `cloud.sun.fill`
+  - No icon on the top right (the duplicate `weather.conditionSymbol` icon was removed)
+  - Weather condition is shown as a `quickConditionChip` pill (same style as "Auf einen Blick") directly below the header, color driven by `weatherConditionChipStyle(for:)`
+  - Bottom plain-text `conditionDescription` is removed (replaced by the pill above)
 - Score details card behavior:
   - always expanded (no collapse chevron/toggle)
   - weather row label is `Wetter & Lufttemp. ({weight}%)` with `wind` icon in `AppTheme.airTempGreen`

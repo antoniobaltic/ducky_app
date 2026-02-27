@@ -360,12 +360,7 @@ struct LakeDetailView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            qualityCard
-            bacteriaCard
-
-            if let depth = lake.visibilityDepth {
-                visibilityCard(depth)
-            }
+            gesundheitCard
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -755,25 +750,31 @@ struct LakeDetailView: View {
 
     private func weatherCard(_ weather: LakeWeather) -> some View {
         VStack(spacing: 14) {
-            HStack {
-                HStack(spacing: 8) {
-                    Image(systemName: "cloud.sun.fill")
-                        .font(.system(size: 18))
-                        .symbolRenderingMode(.multicolor)
-                    Text("Wetter vor Ort")
-                        .font(AppTheme.cardTitle)
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text("Aktuell")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppTheme.freshGreen)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(AppTheme.freshGreen.opacity(0.12), in: Capsule())
-                }
-                Spacer()
-                Image(systemName: weather.conditionSymbol)
-                    .font(.title2)
+            // Header row
+            HStack(spacing: 8) {
+                Image(systemName: "sun.max.fill")
+                    .font(.system(size: 18))
                     .symbolRenderingMode(.multicolor)
+                Text("Wetter vor Ort")
+                    .font(AppTheme.cardTitle)
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text("Aktuell")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.freshGreen)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(AppTheme.freshGreen.opacity(0.12), in: Capsule())
+                Spacer()
+            }
+
+            // Weather condition pill — matches "Auf einen Blick" chip style
+            HStack {
+                quickConditionChip(
+                    icon: weather.conditionSymbol,
+                    value: weather.conditionDescription,
+                    color: weatherConditionChipStyle(for: weather)
+                )
+                Spacer()
             }
 
             HStack(spacing: 8) {
@@ -824,11 +825,6 @@ struct LakeDetailView: View {
                     )
                 }
             }
-
-            Text(weather.conditionDescription)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(AppTheme.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .appCard()
         .background(
@@ -865,154 +861,164 @@ struct LakeDetailView: View {
         .background(color.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    // MARK: - Quality Card
+    // MARK: - Gesundheit Card (Wasserqualität + Bakteriologie + Sichttiefe)
 
-    private var qualityCard: some View {
-        VStack(spacing: 12) {
-            HStack {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(lake.qualityColor)
-                    Text("Wasserqualität")
-                        .font(AppTheme.cardTitle)
-                        .foregroundStyle(AppTheme.textPrimary)
-                }
+    private var gesundheitCard: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack(spacing: 8) {
+                Image(systemName: "heart.text.clipboard.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(AppTheme.freshGreen)
+                Text("Gesundheit")
+                    .font(AppTheme.cardTitle)
+                    .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
                 QualityBadge(qualityLabel: lake.qualityLabel, qualityColor: lake.qualityColor)
             }
+            .padding(.bottom, 14)
 
-            if let date = lake.measurementDate {
-                HStack(spacing: 6) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppTheme.textSecondary)
-                    Text("Gemessen am \(date)")
-                        .font(AppTheme.caption)
-                        .foregroundStyle(AppTheme.textSecondary)
-                    Spacer()
-                }
-            }
-
-            // AGES attribution
-            HStack(spacing: 4) {
-                Image(systemName: "building.columns")
-                    .font(.system(size: 10))
-                Text("Daten: AGES Badegewässerdatenbank")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-            }
-            .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
-        }
-        .appCard()
-    }
-
-    // MARK: - Bacteria Card
-
-    private var bacteriaCard: some View {
-        VStack(spacing: 12) {
-            HStack {
+            // ── Wasserqualität ──────────────────────────────────────────
+            VStack(spacing: 10) {
                 HStack(spacing: 8) {
-                    Image(systemName: "allergens")
-                        .font(.system(size: 18))
-                        .foregroundStyle(AppTheme.teal)
-                    Text("Bakteriologie")
-                        .font(AppTheme.cardTitle)
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(lake.qualityColor)
+                    Text("Wasserqualität")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
+                    Spacer()
+                    Text(lake.qualityLabel)
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(lake.qualityColor)
                 }
-                Spacer()
-                Button {
-                    withAnimation(AppTheme.quickSpring) { showBacteriaValues.toggle() }
-                } label: {
-                    Text(showBacteriaValues ? "Ausblenden" : "Details")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.oceanBlue)
-                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(lake.qualityColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-
-            TrafficLightRow(
-                label: "E.coli",
-                value: lake.eColi.map { String(format: "%.0f KBE/100ml", $0) },
-                status: lake.eColiStatus,
-                showValue: showBacteriaValues
-            )
 
             Divider()
+                .padding(.vertical, 12)
 
-            TrafficLightRow(
-                label: "Enterokokken",
-                value: lake.enterococci.map { String(format: "%.0f KBE/100ml", $0) },
-                status: lake.enterococciStatus,
-                showValue: showBacteriaValues
-            )
-
-            if let date = lake.measurementDate {
-                Divider()
-                HStack(spacing: 6) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppTheme.textSecondary)
-                    Text("Gemessen am \(date)")
-                        .font(AppTheme.caption)
-                        .foregroundStyle(AppTheme.textSecondary)
-                    Spacer()
-                }
-            }
-        }
-        .appCard()
-    }
-
-    // MARK: - Visibility Card
-
-    private func visibilityCard(_ depth: Double) -> some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 14) {
-                Image(systemName: "eye.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(AppTheme.skyBlue)
-                    .frame(width: 40, height: 40)
-                    .background(AppTheme.skyBlue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Sichttiefe")
-                        .font(AppTheme.cardTitle)
+            // ── Bakteriologie ──────────────────────────────────────────
+            VStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "allergens")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.teal)
+                    Text("Bakteriologie")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
-                    Text(String(format: "%.1f Meter", depth))
-                        .font(AppTheme.bodyText)
-                        .foregroundStyle(AppTheme.textSecondary)
+                    Spacer()
+                    Button {
+                        withAnimation(AppTheme.quickSpring) { showBacteriaValues.toggle() }
+                    } label: {
+                        Text(showBacteriaValues ? "Ausblenden" : "Details")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AppTheme.oceanBlue)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(AppTheme.oceanBlue.opacity(0.10), in: Capsule())
+                    }
                 }
 
-                Spacer()
+                TrafficLightRow(
+                    label: "E.coli",
+                    value: lake.eColi.map { String(format: "%.0f KBE/100ml", $0) },
+                    status: lake.eColiStatus,
+                    showValue: showBacteriaValues
+                )
 
-                // Visual depth bar
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(AppTheme.divider)
-                        .frame(width: 80, height: 8)
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [AppTheme.skyBlue, AppTheme.oceanBlue],
-                                startPoint: .leading, endPoint: .trailing
+                Divider()
+
+                TrafficLightRow(
+                    label: "Enterokokken",
+                    value: lake.enterococci.map { String(format: "%.0f KBE/100ml", $0) },
+                    status: lake.enterococciStatus,
+                    showValue: showBacteriaValues
+                )
+            }
+
+            // ── Sichttiefe (optional) ──────────────────────────────────
+            if let depth = lake.visibilityDepth {
+                Divider()
+                    .padding(.vertical, 12)
+
+                HStack(spacing: 12) {
+                    Image(systemName: "eye.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.skyBlue)
+                        .frame(width: 28, height: 28)
+                        .background(AppTheme.skyBlue.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                    Text("Sichttiefe")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+
+                    Spacer()
+
+                    Text(String(format: "%.1f m", depth))
+                        .font(.system(size: 13, weight: .heavy, design: .rounded))
+                        .foregroundStyle(AppTheme.skyBlue)
+
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(AppTheme.divider)
+                            .frame(width: 64, height: 6)
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [AppTheme.skyBlue, AppTheme.oceanBlue],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
                             )
-                        )
-                        .frame(width: min(CGFloat(depth / 8.0) * 80, 80), height: 8)
+                            .frame(width: min(CGFloat(depth / 8.0) * 64, 64), height: 6)
+                    }
                 }
             }
 
+            // ── Footer: date + attribution ─────────────────────────────
             if let date = lake.measurementDate {
                 Divider()
+                    .padding(.vertical, 10)
                 HStack(spacing: 6) {
                     Image(systemName: "calendar")
-                        .font(.system(size: 13))
+                        .font(.system(size: 12))
                         .foregroundStyle(AppTheme.textSecondary)
                     Text("Gemessen am \(date)")
                         .font(AppTheme.caption)
                         .foregroundStyle(AppTheme.textSecondary)
                     Spacer()
+                    HStack(spacing: 4) {
+                        Image(systemName: "building.columns")
+                            .font(.system(size: 10))
+                        Text("AGES")
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                    }
+                    .foregroundStyle(AppTheme.textSecondary.opacity(0.55))
                 }
+            } else {
+                Divider()
+                    .padding(.vertical, 10)
+                HStack(spacing: 4) {
+                    Image(systemName: "building.columns")
+                        .font(.system(size: 10))
+                    Text("Daten: AGES Badegewässerdatenbank")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                    Spacer()
+                }
+                .foregroundStyle(AppTheme.textSecondary.opacity(0.55))
             }
         }
         .appCard()
+        .background(
+            LinearGradient(
+                colors: [AppTheme.freshGreen.opacity(0.07), .clear],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
+        )
     }
 
     // MARK: - Map Card
