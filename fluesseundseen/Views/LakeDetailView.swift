@@ -576,15 +576,48 @@ struct LakeDetailView: View {
 
     private var appleMapsCombinedCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let applePlaceItem {
-                appleMapsInfoContent(place: applePlaceItem)
-            } else if isLoadingApplePlace || !hasApplePlaceLookupMiss {
-                appleMapsLoadingContent
-            } else {
-                appleMapsUnavailableContent
+
+            // Header — always visible; shows matched POI name as subtitle when found,
+            // small spinner while the lookup is in flight.
+            HStack(spacing: 10) {
+                appleMapsIcon
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Apple Maps")
+                        .font(AppTheme.cardTitle)
+                        .foregroundStyle(AppTheme.textPrimary)
+                    if isLoadingApplePlace {
+                        Text("Suche passenden Eintrag …")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(AppTheme.textSecondary)
+                    } else if let name = applePlaceItem?.name, !name.isEmpty {
+                        Text(name)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer()
+                if isLoadingApplePlace {
+                    ProgressView()
+                        .tint(AppTheme.teal)
+                        .scaleEffect(0.85)
+                }
             }
 
+            // Extra info rows — only shown when a POI was matched and carries that data.
+            // "Ort" is intentionally omitted (visible elsewhere in the app).
+            // Opening times are available in the Maps app itself via the route button.
+            if let place = applePlaceItem {
+                appleMapsMetadataBlock(place: place)
+            }
+
+            // Map — always uses the lake's own AGES GPS coordinates as ground truth.
             mapCard
+
+            // Route button — always functional.
+            // When a POI was matched: opens Maps with the full place card
+            // (opening hours, reviews, photos etc. via Maps' own database).
+            // When no POI found: routes to AGES coordinates directly.
             routeButton
         }
         .appCard()
@@ -596,64 +629,6 @@ struct LakeDetailView: View {
             ),
             in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
         )
-    }
-
-    private var appleMapsLoadingContent: some View {
-        HStack(spacing: 10) {
-            appleMapsIcon
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Apple Maps")
-                    .font(AppTheme.cardTitle)
-                    .foregroundStyle(AppTheme.textPrimary)
-                Text("Ducky sucht den passenden Ort in Apple Maps …")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
-            Spacer()
-            ProgressView()
-                .tint(AppTheme.teal)
-        }
-        .shimmer()
-    }
-
-    private var appleMapsUnavailableContent: some View {
-        HStack(alignment: .top, spacing: 10) {
-            appleMapsIcon
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Apple Maps")
-                    .font(AppTheme.cardTitle)
-                    .foregroundStyle(AppTheme.textPrimary)
-                Text("Für diesen See konnten wir noch keinen sicheren Apple-Maps-Ort finden.")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func appleMapsInfoContent(place: MKMapItem) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                appleMapsIcon
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Apple Maps")
-                        .font(AppTheme.cardTitle)
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text(place.name ?? lake.displayName)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .lineLimit(1)
-                }
-                Spacer()
-            }
-
-            Text("Zeigt dir Öffnungszeiten, Website, Telefonnummer und weitere Ortsinfos direkt in der App, sofern verfügbar.")
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(AppTheme.textPrimary)
-                .lineSpacing(2)
-
-            appleMapsMetadataBlock(place: place)
-        }
     }
 
     private var appleMapsIcon: some View {
@@ -674,34 +649,23 @@ struct LakeDetailView: View {
             .shadow(color: AppTheme.teal.opacity(0.22), radius: 6, y: 2)
     }
 
+    // Phone + website only; "Ort" is excluded (redundant with hero section).
     @ViewBuilder
     private func appleMapsMetadataBlock(place: MKMapItem) -> some View {
         let phone = place.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let websiteHost = place.url?.host ?? place.url?.absoluteString
-        let addressText = appleMapsAddressText(for: place)
+        let websiteURL = place.url
+        let websiteDisplay = websiteURL?.host ?? websiteURL?.absoluteString
 
-        if phone != nil || websiteHost != nil || addressText != nil {
+        let hasPhone = phone != nil && !phone!.isEmpty
+        let hasWebsite = websiteDisplay != nil && !websiteDisplay!.isEmpty
+
+        if hasPhone || hasWebsite {
             VStack(alignment: .leading, spacing: 8) {
-                if let addressText {
-                    appleMapsMetaRow(
-                        icon: "mappin.and.ellipse",
-                        label: "Ort",
-                        value: addressText
-                    )
-                }
                 if let phone, !phone.isEmpty {
-                    appleMapsMetaRow(
-                        icon: "phone.fill",
-                        label: "Telefon",
-                        value: phone
-                    )
+                    appleMapsMetaRow(icon: "phone.fill", label: "Telefon", value: phone)
                 }
-                if let websiteHost, !websiteHost.isEmpty {
-                    appleMapsMetaRow(
-                        icon: "globe",
-                        label: "Website",
-                        value: websiteHost
-                    )
+                if let websiteDisplay, !websiteDisplay.isEmpty {
+                    appleMapsMetaRow(icon: "globe", label: "Website", value: websiteDisplay)
                 }
             }
         }
@@ -724,26 +688,6 @@ struct LakeDetailView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(AppTheme.teal.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private func appleMapsAddressText(for place: MKMapItem) -> String? {
-        if let representations = place.addressRepresentations {
-            if let city = representations.cityWithContext, !city.isEmpty {
-                return city
-            }
-            if let singleLine = representations.fullAddress(includingRegion: false, singleLine: true),
-               !singleLine.isEmpty {
-                return singleLine
-            }
-        }
-
-        if let shortAddress = place.address?.shortAddress, !shortAddress.isEmpty {
-            return shortAddress
-        }
-        if let fullAddress = place.address?.fullAddress, !fullAddress.isEmpty {
-            return fullAddress
-        }
-        return nil
     }
 
     // MARK: - Weather Card
@@ -1100,25 +1044,34 @@ struct LakeDetailView: View {
     }
 
     private func openInMaps(using mapItem: MKMapItem?) {
-        guard let routeURL = appleMapsRouteURL(using: mapItem) else { return }
-        #if os(iOS)
-        UIApplication.shared.open(routeURL, options: [:]) { success in
-            if !success {
-                openURL(routeURL)
+        if let mapItem {
+            // When a POI was matched, open the full place card in Maps.
+            // This gives the user opening hours, reviews, photos etc. from Maps' database.
+            #if os(iOS)
+            mapItem.openInMaps(launchOptions: [
+                MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
+            ])
+            #else
+            mapItem.openInMaps(launchOptions: nil)
+            #endif
+        } else {
+            // Fallback: route to the lake's AGES coordinates via URL scheme.
+            guard let routeURL = coordinateFallbackRouteURL() else { return }
+            #if os(iOS)
+            UIApplication.shared.open(routeURL, options: [:]) { success in
+                if !success { openURL(routeURL) }
             }
+            #else
+            NSWorkspace.shared.open(routeURL)
+            #endif
         }
-        #else
-        NSWorkspace.shared.open(routeURL)
-        #endif
     }
 
-    private func appleMapsRouteURL(using mapItem: MKMapItem?) -> URL? {
-        let coordinate = mapItem?.location.coordinate ?? lake.coordinate
-        let destinationName = mapItem?.name ?? lake.name
-        let encodedName = destinationName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? lake.name
-        return URL(
-            string: "https://maps.apple.com/?daddr=\(coordinate.latitude),\(coordinate.longitude)&q=\(encodedName)&dirflg=d"
-        )
+    private func coordinateFallbackRouteURL() -> URL? {
+        let c = lake.coordinate
+        let encodedName = lake.name
+            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? lake.name
+        return URL(string: "https://maps.apple.com/?daddr=\(c.latitude),\(c.longitude)&q=\(encodedName)&dirflg=d")
     }
 }
 
