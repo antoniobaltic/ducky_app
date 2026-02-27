@@ -649,18 +649,22 @@ struct LakeDetailView: View {
             .shadow(color: AppTheme.teal.opacity(0.22), radius: 6, y: 2)
     }
 
-    // Phone + website only; "Ort" is excluded (redundant with hero section).
     @ViewBuilder
     private func appleMapsMetadataBlock(place: MKMapItem) -> some View {
         let phone = place.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
         let websiteURL = place.url
         let websiteDisplay = websiteURL?.host ?? websiteURL?.absoluteString
+        let address = formattedAddress(from: place)
 
         let hasPhone = phone != nil && !phone!.isEmpty
         let hasWebsite = websiteDisplay != nil && !websiteDisplay!.isEmpty
+        let hasAddress = address != nil
 
-        if hasPhone || hasWebsite {
+        if hasPhone || hasWebsite || hasAddress {
             VStack(alignment: .leading, spacing: 8) {
+                if let address {
+                    appleMapsMetaRow(icon: "mappin.circle.fill", label: "Adresse", value: address)
+                }
                 if let phone, !phone.isEmpty {
                     appleMapsMetaRow(icon: "phone.fill", label: "Telefon", value: phone)
                 }
@@ -669,6 +673,38 @@ struct LakeDetailView: View {
                 }
             }
         }
+    }
+
+    private func formattedAddress(from place: MKMapItem) -> String? {
+        let placemark = place.placemark
+        var parts: [String] = []
+
+        // Street + number
+        if let street = placemark.thoroughfare {
+            if let number = placemark.subThoroughfare {
+                parts.append("\(street) \(number)")
+            } else {
+                parts.append(street)
+            }
+        }
+
+        // Postal code + city
+        if let postalCode = placemark.postalCode, let city = placemark.locality {
+            parts.append("\(postalCode) \(city)")
+        } else if let city = placemark.locality {
+            parts.append(city)
+        }
+
+        // State (Bundesland) — only if different from city
+        if let state = placemark.administrativeArea, state != placemark.locality {
+            // Omit if we already have city + postal
+            if parts.count < 2 {
+                parts.append(state)
+            }
+        }
+
+        let result = parts.joined(separator: ", ")
+        return result.isEmpty ? nil : result
     }
 
     private func appleMapsMetaRow(icon: String, label: String, value: String) -> some View {
