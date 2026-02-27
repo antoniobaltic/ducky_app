@@ -57,13 +57,19 @@ struct LakeDetailView: View {
             }
         }
         .background(
-            ZStack {
+            ZStack(alignment: .top) {
                 AppTheme.pageGradient
                 BubbleBackground(color: AppTheme.lightBlue).opacity(0.35)
+                currentScore.duckState.backgroundGradient
+                    .frame(height: 220)
+                    .ignoresSafeArea(edges: .top)
             }
         )
         .ignoresSafeArea(edges: .top)
         .iOSNavigationBarInline()
+        #if os(iOS)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        #endif
         .toolbar {
             ToolbarItem(placement: .iOSTopBarTrailing) {
                 HStack(spacing: 12) {
@@ -256,24 +262,10 @@ struct LakeDetailView: View {
                     .transition(.opacity)
             }
 
-            if let applePlaceItem {
-                appleMapsInfoCard(place: applePlaceItem)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else if isLoadingApplePlace {
-                appleMapsLoadingCard
-                    .transition(.opacity)
-            } else if hasApplePlaceLookupMiss {
-                appleMapsUnavailableCard
-                    .transition(.opacity)
-            }
+            appleMapsCombinedCard
 
             // Score breakdown
             ScoreBreakdownView(score: currentScore)
-
-            // Off-season info banner
-            if Season.isOffSeason {
-                seasonInfoBanner
-            }
 
             // Weather (always try to show)
             if let weather {
@@ -287,9 +279,6 @@ struct LakeDetailView: View {
             if let depth = lake.visibilityDepth {
                 visibilityCard(depth)
             }
-
-            mapCard
-            routeButton
         }
         .padding(.horizontal, 16)
         .padding(.top, 4)
@@ -478,7 +467,31 @@ struct LakeDetailView: View {
         #endif
     }
 
-    private var appleMapsLoadingCard: some View {
+    private var appleMapsCombinedCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let applePlaceItem {
+                appleMapsInfoContent(place: applePlaceItem)
+            } else if isLoadingApplePlace || !hasApplePlaceLookupMiss {
+                appleMapsLoadingContent
+            } else {
+                appleMapsUnavailableContent
+            }
+
+            mapCard
+            routeButton
+        }
+        .appCard()
+        .background(
+            LinearGradient(
+                colors: [AppTheme.teal.opacity(0.08), .clear],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
+        )
+    }
+
+    private var appleMapsLoadingContent: some View {
         HStack(spacing: 10) {
             appleMapsIcon
             VStack(alignment: .leading, spacing: 4) {
@@ -493,11 +506,10 @@ struct LakeDetailView: View {
             ProgressView()
                 .tint(AppTheme.teal)
         }
-        .appCard()
         .shimmer()
     }
 
-    private var appleMapsUnavailableCard: some View {
+    private var appleMapsUnavailableContent: some View {
         HStack(alignment: .top, spacing: 10) {
             appleMapsIcon
             VStack(alignment: .leading, spacing: 5) {
@@ -510,10 +522,9 @@ struct LakeDetailView: View {
             }
             Spacer(minLength: 0)
         }
-        .appCard()
     }
 
-    private func appleMapsInfoCard(place: MKMapItem) -> some View {
+    private func appleMapsInfoContent(place: MKMapItem) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 appleMapsIcon
@@ -527,21 +538,6 @@ struct LakeDetailView: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                Button {
-                    triggerLightHaptic()
-                    openInMaps(using: place)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Route")
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                    }
-                }
-                .foregroundStyle(AppTheme.teal)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(AppTheme.teal.opacity(0.12), in: Capsule())
             }
 
             Text("Zeigt dir Öffnungszeiten, Website, Telefonnummer und weitere Ortsinfos direkt in der App, sofern verfügbar.")
@@ -551,15 +547,6 @@ struct LakeDetailView: View {
 
             appleMapsMetadataBlock(place: place)
         }
-        .appCard()
-        .background(
-            LinearGradient(
-                colors: [AppTheme.teal.opacity(0.08), .clear],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
-        )
     }
 
     private var appleMapsIcon: some View {
@@ -650,32 +637,6 @@ struct LakeDetailView: View {
             return fullAddress
         }
         return nil
-    }
-
-    // MARK: - Season Info Banner
-
-    private var seasonInfoBanner: some View {
-        HStack(spacing: 10) {
-            Image(systemName: Season.current.heroIcon)
-                .font(.system(size: 18))
-                .foregroundStyle(Season.current == .winter ? AppTheme.winterBlue : AppTheme.autumnOrange)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Außerhalb der Badesaison")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
-                Text("Wassertemperaturen werden von Juni bis August gemessen.")
-                    .font(.system(size: 12, weight: .regular, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
-
-            Spacer()
-        }
-        .appCard()
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
-                .stroke(AppTheme.textSecondary.opacity(0.15), lineWidth: 1)
-        )
     }
 
     // MARK: - Weather Card

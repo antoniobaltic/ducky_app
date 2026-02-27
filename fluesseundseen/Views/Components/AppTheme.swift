@@ -197,6 +197,7 @@ struct AppCardStyle: ViewModifier {
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
                     .stroke(AppTheme.cardStroke.opacity(0.45), lineWidth: 1)
+                    .allowsHitTesting(false)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
@@ -210,6 +211,7 @@ struct AppCardStyle: ViewModifier {
                             endPoint: .bottomTrailing
                         )
                     )
+                    .allowsHitTesting(false)
             )
             .shadow(color: .black.opacity(0.07), radius: 16, x: 0, y: 6)
     }
@@ -235,6 +237,7 @@ struct ShimmerModifier: ViewModifier {
                     endPoint: .init(x: phase + 0.5, y: 0.5)
                 )
                 .animation(.linear(duration: 1.5).repeatForever(autoreverses: false), value: phase)
+                .allowsHitTesting(false)
             )
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
             .onAppear { phase = 1.5 }
