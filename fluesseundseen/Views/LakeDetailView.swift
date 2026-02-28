@@ -995,7 +995,6 @@ struct LakeDetailView: View {
                     .font(AppTheme.cardTitle)
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
-                QualityBadge(qualityLabel: lake.qualityLabel, qualityColor: lake.qualityColor)
             }
             .padding(.bottom, 14)
 
@@ -1077,7 +1076,7 @@ struct LakeDetailView: View {
                 }
 
                 TrafficLightRow(
-                    label: "E.coli",
+                    label: "E.Coli",
                     value: lake.eColi.map { String(format: "%.0f KBE/100ml", $0) },
                     status: lake.eColiStatus,
                     showValue: showBacteriaValues

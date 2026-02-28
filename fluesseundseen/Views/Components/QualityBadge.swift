@@ -58,7 +58,7 @@ struct TrafficLightRow: View {
 
         Divider()
 
-        TrafficLightRow(label: "E.coli", value: "50 KBE/100ml", status: .green)
+        TrafficLightRow(label: "E.Coli", value: "50 KBE/100ml", status: .green)
         TrafficLightRow(label: "Enterokokken", value: "600 KBE/100ml", status: .red)
     }
     .padding()
