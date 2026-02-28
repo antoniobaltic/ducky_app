@@ -351,9 +351,6 @@ struct LakeDetailView: View {
 
             appleMapsCombinedCard
 
-            // Score breakdown
-            ScoreBreakdownView(score: currentScore)
-
             // Weather (always try to show)
             if let weather {
                 weatherCard(weather)
@@ -361,6 +358,9 @@ struct LakeDetailView: View {
             }
 
             gesundheitCard
+
+            // Score breakdown — at the very bottom
+            ScoreBreakdownView(score: currentScore)
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
