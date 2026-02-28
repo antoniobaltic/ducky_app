@@ -30,6 +30,8 @@ struct HomeView: View {
     @State private var cachedGoodScoreCount: Int = 0
     @State private var cachedAverageScore: SwimScore? = nil
     @State private var cachedNearbyAverageScore: SwimScore? = nil
+    @State private var cachedAverageHeroMessage: String? = nil
+    @State private var cachedAverageHeroLevel: SwimScore.Level? = nil
     @State private var visibleCount: Int = 20        // progressive pagination
     @State private var updateTask: Task<Void, Never>?
     @State private var sectionsVisible = false
@@ -147,36 +149,64 @@ struct HomeView: View {
 
     private var heroGreeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
-        if hour < 6  { return "Gute Nacht!" }
-        if hour < 12 { return "Guten Morgen!" }
-        if hour < 18 { return "Hallo!" }
-        return "Guten Abend!"
+        if hour < 6  { return "Heast, immer no munter?" }
+        if hour < 12 { return "Grias di!" }
+        if hour < 18 { return "Servas! I hob Flossn-Jucken." }
+        return "Guadn Abend!"
     }
 
     private var heroMessage: String {
-        if dataService.isLoading { return "Ducky schnüffelt am Wasser..." }
+        if dataService.isLoading { return "I schnüffel grad durchs Wasser-Orakel... gib ma a Sekundal." }
 
         let total = dataService.lakes.count
-        if total == 0 { return "Entdecke Österreichs schönste Badegewässer!" }
+        if total == 0 { return "No koane Seen da? Heast, i find da glei a poar." }
         if shouldBlockForWeather {
-            return "Ducky stalkt \(total) Seen gleichzeitig. Moment…"
+            return "I jonglier grad mit \(total) Seen gleichzeitig. Ned hudeln, i rechne no!"
         }
         if weatherService.isUsingStaleCache {
-            return "Rankings stehen. Ducky checkt nochmal heimlich."
+            return "Ranking steht scho, oba i mach im Hintergrund no an Frische-Check."
         }
 
         if let avg = cachedAverageScore {
-            let good = cachedGoodScoreCount
-            switch avg.level {
-            case .perfekt:  return "TRAUMTAG! \(good) Seen sind quasi perfekt. Worauf wartest du?!"
-            case .gut:      return "Solide! \(good) Seen haben gute Bedingungen. Ducky ist zufrieden."
-            case .mittel:   return "Naja. \(good) Seen gehen klar — der Rest ist... mutig."
-            case .schlecht: return "Ducky empfiehlt: Couch. Heute ist nicht dein Tag."
-            case .warnung:  return "Uff. Ducky bleibt heute definitiv am Ufer."
-            }
+            return cachedAverageHeroMessage ?? Self.randomizedHeroMessage(for: avg.level)
         }
 
-        return "\(total) Gewässer geladen. Wetterdaten werden aktualisiert."
+        return "\(total) Gewässer san da. I schupf grad die Wetterdaten nach."
+    }
+
+    private static func randomizedHeroMessage(for level: SwimScore.Level) -> String {
+        switch level {
+        case .perfekt:
+            return [
+                "Oida, heit is Badetag vom Feinsten. REIN DA!",
+                "Sonne oben, Laune oben, Flossn oben. GEMMA!",
+                "Heit is so guad, sogar mei Quietscheentn macht an Backflip."
+            ].randomElement() ?? "Oida, heit is Badetag vom Feinsten. REIN DA!"
+        case .gut:
+            return [
+                "Passt scho richtig guad. *Ducky gibt den offiziellen Nicker*",
+                "Ned perfekt, oba gschmeidig. Kann ma sehr wohl machen.",
+                "Des fühlt sich nach solidem Sprung ins Wasser an."
+            ].randomElement() ?? "Passt scho richtig guad. *Ducky gibt den offiziellen Nicker*"
+        case .mittel:
+            return [
+                "Jo mei, geht so. Kann lustig sein, kann a wild werden.",
+                "I bin a bissi skeptisch, oba ned komplett dagegen.",
+                "Heit is eher „wennst magst“ statt „muss sein“."
+            ].randomElement() ?? "Jo mei, geht so. Kann lustig sein, kann a wild werden."
+        case .schlecht:
+            return [
+                "I glaub i bleib heit lieber im Hoodie und ess a fettes Brot.",
+                "Heit schreit alles nach Couch statt Kopfsprung.",
+                "Kann ma machen, dann brauchst danach Wärmflasche und Lebensmut."
+            ].randomElement() ?? "I glaub i bleib heit lieber im Hoodie und ess a fettes Brot."
+        case .warnung:
+            return [
+                "Na heit fix ned. I zieh die Notbremse.",
+                "Heit bleibt der Schnabel trocken. Ende der Diskussion.",
+                "Heut is ka Badetag heast. Bleib daham."
+            ].randomElement() ?? "Na heit fix ned. I zieh die Notbremse."
+        }
     }
 
     // MARK: - Display Update (debounced, off-render-path)
@@ -249,6 +279,15 @@ struct HomeView: View {
                 cachedAverageScore = scored.min { abs($0.total - avgTotal) < abs($1.total - avgTotal) }
             } else {
                 cachedAverageScore = nil
+            }
+            if let level = cachedAverageScore?.level {
+                if cachedAverageHeroLevel != level || cachedAverageHeroMessage == nil {
+                    cachedAverageHeroMessage = Self.randomizedHeroMessage(for: level)
+                    cachedAverageHeroLevel = level
+                }
+            } else {
+                cachedAverageHeroLevel = nil
+                cachedAverageHeroMessage = nil
             }
 
             // Nearby average: 5 closest lakes → drives home screen Ducky state
@@ -451,11 +490,13 @@ struct HomeView: View {
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.75))
 
-                Text(heroMessage)
+                Text(LocalizedStringKey(heroMessage))
                     .font(.system(size: 17, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
+                    .minimumScaleFactor(0.90)
+                    .allowsTightening(true)
                     .padding(.horizontal, 20)
                     .fixedSize(horizontal: false, vertical: true)
 
