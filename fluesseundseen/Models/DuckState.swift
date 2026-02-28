@@ -12,7 +12,7 @@ enum DuckState: String, Equatable, CaseIterable {
         case .begeistert: return "Begeistert"
         case .zufrieden:  return "Zufrieden"
         case .zoegernd:   return "Zögernd"
-        case .frierend:   return "Frierend"
+        case .frierend:   return "Angewidert"
         case .warnend:    return "Warnend"
         }
     }
@@ -22,7 +22,7 @@ enum DuckState: String, Equatable, CaseIterable {
         case .begeistert: return "REIN DA! Ducky dreht durch — PERFEKT!"
         case .zufrieden:  return "Nicht schlecht! Ducky nickt anerkennend."
         case .zoegernd:   return "Hm. Ducky ist skeptisch. Traust dich?"
-        case .frierend:   return "Gänsehaut. Als Ente. Die Ironie."
+        case .frierend:   return "Igitt. Ducky rümpft die Nase."
         case .warnend:    return "Nein. Einfach nein. Ducky streikt."
         }
     }
@@ -32,26 +32,17 @@ enum DuckState: String, Equatable, CaseIterable {
         case .begeistert: return "🤩"
         case .zufrieden:  return "😊"
         case .zoegernd:   return "🤔"
-        case .frierend:   return "🥶"
+        case .frierend:   return "🤢"
         case .warnend:    return "⚠️"
         }
     }
 
     var bodyColor: Color {
-        switch self {
-        case .begeistert: return Color(red: 1.00, green: 0.85, blue: 0.20)
-        case .zufrieden:  return Color(red: 0.98, green: 0.82, blue: 0.30)
-        case .zoegernd:   return Color(red: 0.92, green: 0.80, blue: 0.38)
-        case .frierend:   return Color(red: 0.78, green: 0.86, blue: 0.96)
-        case .warnend:    return Color(red: 1.00, green: 0.78, blue: 0.55)
-        }
+        Color(red: 1.00, green: 0.85, blue: 0.20)
     }
 
     var billColor: Color {
-        switch self {
-        case .frierend: return Color(red: 0.75, green: 0.65, blue: 0.95)
-        default:        return Color(red: 1.00, green: 0.55, blue: 0.10)
-        }
+        Color(red: 1.00, green: 0.55, blue: 0.10)
     }
 
     var backgroundGradient: LinearGradient {
@@ -71,7 +62,7 @@ enum DuckState: String, Equatable, CaseIterable {
         case .begeistert: return AppTheme.sunshine
         case .zufrieden:  return AppTheme.freshGreen
         case .zoegernd:   return AppTheme.sunshine.opacity(0.8)
-        case .frierend:   return AppTheme.oceanBlue
+        case .frierend:   return AppTheme.freshGreen
         case .warnend:    return AppTheme.coral
         }
     }

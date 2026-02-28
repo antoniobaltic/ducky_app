@@ -12,7 +12,6 @@ struct DuckView: View {
     @State private var cheekGlow: Double = 0
     @State private var sparkleOpacity: Double = 0
     @State private var bodyTilt: Double = 0
-    @State private var shiverX: CGFloat = 0
     @State private var beakGap: CGFloat = 0
     @State private var decorFloat: CGFloat = 0
     @State private var entryScale: CGFloat = 0.6
@@ -26,7 +25,6 @@ struct DuckView: View {
             if !isCompact { waterRipple }
             duckBody
                 .rotationEffect(.degrees(bodyTilt))
-                .offset(x: state == .frierend ? shiverX : 0)
         }
         .frame(width: size, height: size)
         .scaleEffect(entryScale)
@@ -115,6 +113,11 @@ struct DuckView: View {
 
             // Eyes
             eyeGroup.offset(x: 6 * s, y: -20 * s + bobOffset)
+
+            // Sunglasses (begeistert only)
+            if state == .begeistert && !isCompact {
+                sunglasses.offset(x: 6 * s, y: -20 * s + bobOffset)
+            }
 
             // Hair tuft
             if !isCompact {
@@ -215,12 +218,12 @@ struct DuckView: View {
                 }
             }
 
-            // Squint overlay for cold
+            // Squint overlay for disgusted (raised lower lid)
             if state == .frierend {
                 Capsule()
                     .fill(state.bodyColor)
-                    .frame(width: eyeWidth * 1.15, height: eyeHeight * 0.38)
-                    .offset(y: -eyeHeight * 0.32)
+                    .frame(width: eyeWidth * 1.15, height: eyeHeight * 0.45)
+                    .offset(y: eyeHeight * 0.30)
             }
 
             // Eyebrows
@@ -236,7 +239,7 @@ struct DuckView: View {
         case .begeistert: return 16 * s
         case .zufrieden:  return 14 * s
         case .zoegernd:   return 13 * s
-        case .frierend:   return 12 * s
+        case .frierend:   return 13 * s
         case .warnend:    return 14 * s
         }
     }
@@ -246,7 +249,7 @@ struct DuckView: View {
         case .begeistert: return 16 * s
         case .zufrieden:  return 12 * s
         case .zoegernd:   return 13 * s
-        case .frierend:   return 8 * s
+        case .frierend:   return 11 * s
         case .warnend:    return 13 * s
         }
     }
@@ -256,7 +259,7 @@ struct DuckView: View {
         case .begeistert: return 7 * s
         case .zufrieden:  return 5.5 * s
         case .zoegernd:   return 5 * s
-        case .frierend:   return 3.5 * s
+        case .frierend:   return 4.5 * s
         case .warnend:    return 4 * s
         }
     }
@@ -292,7 +295,7 @@ struct DuckView: View {
         switch state {
         case .warnend:  return 0.7
         case .zoegernd: return 0.5
-        case .frierend: return 0.4
+        case .frierend: return 0.65
         default:        return 0
         }
     }
@@ -301,8 +304,67 @@ struct DuckView: View {
         switch state {
         case .warnend:  return isLeft ? -20 : 20
         case .zoegernd: return isLeft ? 15 : -5
-        case .frierend: return isLeft ? 12 : -12
+        case .frierend: return isLeft ? 20 : -20
         default:        return 0
+        }
+    }
+
+    // MARK: - Sunglasses
+
+    private var sunglasses: some View {
+        ZStack {
+            // Arms (behind lenses)
+            Capsule()
+                .fill(Color(white: 0.32))
+                .frame(width: 11 * s, height: 2 * s)
+                .offset(x: -22 * s)
+            Capsule()
+                .fill(Color(white: 0.32))
+                .frame(width: 11 * s, height: 2 * s)
+                .offset(x: 22 * s)
+
+            // Left lens
+            Ellipse()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.08), Color(white: 0.22)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 19 * s, height: 13 * s)
+                .overlay(Ellipse().stroke(Color(white: 0.44), lineWidth: 1.5 * s))
+                .offset(x: -12 * s)
+
+            // Left lens glint
+            Ellipse()
+                .fill(.white.opacity(0.26))
+                .frame(width: 6 * s, height: 3 * s)
+                .offset(x: -16 * s, y: -2.5 * s)
+                .blur(radius: 0.8 * s)
+
+            // Right lens
+            Ellipse()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.08), Color(white: 0.22)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 19 * s, height: 13 * s)
+                .overlay(Ellipse().stroke(Color(white: 0.44), lineWidth: 1.5 * s))
+                .offset(x: 12 * s)
+
+            // Right lens glint
+            Ellipse()
+                .fill(.white.opacity(0.26))
+                .frame(width: 6 * s, height: 3 * s)
+                .offset(x: 8 * s, y: -2.5 * s)
+                .blur(radius: 0.8 * s)
+
+            // Bridge
+            Capsule()
+                .fill(Color(white: 0.44))
+                .frame(width: 6 * s, height: 2 * s)
         }
     }
 
@@ -347,6 +409,19 @@ struct DuckView: View {
                 .stroke(.white.opacity(0.4), lineWidth: 1.5 * s)
                 .frame(width: 20 * s, height: 14 * s)
             }
+
+            // Frown line for disgusted
+            if state == .frierend {
+                Path { p in
+                    p.move(to: CGPoint(x: 2 * s, y: 8 * s))
+                    p.addQuadCurve(
+                        to: CGPoint(x: 16 * s, y: 8 * s),
+                        control: CGPoint(x: 9 * s, y: 3 * s)
+                    )
+                }
+                .stroke(.white.opacity(0.35), lineWidth: 1.5 * s)
+                .frame(width: 20 * s, height: 14 * s)
+            }
         }
     }
 
@@ -383,7 +458,7 @@ struct DuckView: View {
         case .begeistert: return .pink
         case .zufrieden:  return .pink
         case .zoegernd:   return .clear
-        case .frierend:   return Color(red: 0.6, green: 0.7, blue: 1.0)
+        case .frierend:   return Color(red: 0.55, green: 0.82, blue: 0.38)
         case .warnend:    return Color(red: 1.0, green: 0.4, blue: 0.3)
         }
     }
@@ -464,16 +539,25 @@ struct DuckView: View {
 
         case .frierend:
             Group {
-                snowflake(x: -34, y: -30, size: 12)
-                snowflake(x: 38, y: -44, size: 9)
-                snowflake(x: -20, y: -50, size: 7)
-                // Breath cloud
-                Ellipse()
-                    .fill(.white.opacity(0.35))
-                    .frame(width: 14 * s, height: 8 * s)
-                    .offset(x: 40 * s, y: -8 * s + bobOffset)
-                    .blur(radius: 2 * s)
+                // Nausea waveform
+                Image(systemName: "waveform")
+                    .font(.system(size: 11 * s))
+                    .foregroundStyle(Color(red: 0.28, green: 0.70, blue: 0.28).opacity(0.7))
+                    .opacity(sparkleOpacity * 0.9)
+                    .offset(x: -34 * s, y: -30 * s + bobOffset + decorFloat)
+                // Disgust swirl tilde
+                Text("~")
+                    .font(.system(size: 18 * s, weight: .black, design: .rounded))
+                    .foregroundStyle(Color(red: 0.3, green: 0.72, blue: 0.3).opacity(0.55))
                     .opacity(sparkleOpacity)
+                    .offset(x: 32 * s, y: -46 * s + bobOffset + decorFloat * 0.8)
+                // Sick glow dot
+                Circle()
+                    .fill(Color(red: 0.4, green: 0.78, blue: 0.4).opacity(0.35))
+                    .frame(width: 7 * s, height: 7 * s)
+                    .offset(x: -18 * s, y: -50 * s + bobOffset)
+                    .blur(radius: 2 * s)
+                    .opacity(sparkleOpacity * 0.7)
             }
 
         case .warnend:
@@ -499,25 +583,18 @@ struct DuckView: View {
             .offset(x: x * s, y: y * s + bobOffset + decorFloat * (size / 13))
     }
 
-    private func snowflake(x: CGFloat, y: CGFloat, size: CGFloat) -> some View {
-        Image(systemName: "snowflake")
-            .font(.system(size: size * s))
-            .foregroundStyle(AppTheme.skyBlue.opacity(0.6))
-            .offset(x: x * s, y: y * s + bobOffset + decorFloat * 0.5)
-    }
-
     // MARK: - Animations
 
     private func startAnimations() {
         // Bob
-        let bobAmount: CGFloat = state == .frierend ? -1.5 : -3
-        let bobDuration: Double = state == .frierend ? 0.8 : state == .begeistert ? 1.6 : 2.2
+        let bobAmount: CGFloat = state == .begeistert ? -7 : state == .frierend ? -2.5 : -3
+        let bobDuration: Double = state == .begeistert ? 0.5 : state == .frierend ? 2.0 : 2.2
         withAnimation(.easeInOut(duration: bobDuration).repeatForever(autoreverses: true)) {
             bobOffset = bobAmount * s
         }
 
         // Wing flap
-        let wingTarget: Double = state == .begeistert ? -25 : state == .warnend ? -8 : -4
+        let wingTarget: Double = state == .begeistert ? -32 : state == .warnend ? -8 : -4
         let wingSpeed: Double = state == .begeistert ? 0.3 : state == .warnend ? 0.8 : 2.5
         withAnimation(.easeInOut(duration: wingSpeed).repeatForever(autoreverses: true)) {
             wingAngle = wingTarget
@@ -526,10 +603,10 @@ struct DuckView: View {
         // Body tilt per state
         let (tiltTarget, tiltDuration): (Double, Double) = {
             switch state {
-            case .begeistert: return (6, 0.4)
+            case .begeistert: return (8, 0.25)
             case .zufrieden:  return (2.5, 3)
             case .zoegernd:   return (-4, 2.5)
-            case .frierend:   return (2, 0.12)
+            case .frierend:   return (1.5, 2.5)
             case .warnend:    return (4, 0.6)
             }
         }()
@@ -537,30 +614,15 @@ struct DuckView: View {
             bodyTilt = tiltTarget
         }
 
-        // Shiver
-        if state == .frierend {
-            withAnimation(.easeInOut(duration: 0.08).repeatForever(autoreverses: true)) {
-                shiverX = 1.5 * s
-            }
-        } else {
-            withAnimation(.easeInOut(duration: 0.2)) { shiverX = 0 }
-        }
-
-        // Beak chatter
-        if state == .frierend {
-            withAnimation(.easeInOut(duration: 0.15).repeatForever(autoreverses: true)) {
-                beakGap = 3 * s
-            }
-        } else {
-            withAnimation(.easeInOut(duration: 0.2)) { beakGap = 0 }
-        }
+        // Beak gap always reset (no chatter)
+        withAnimation(.easeInOut(duration: 0.2)) { beakGap = 0 }
 
         // Cheek glow
         let (cheekTarget, cheekDuration): (Double, Double) = {
             switch state {
             case .begeistert: return (0.5, 1.5)
             case .zufrieden:  return (0.25, 2)
-            case .frierend:   return (0.3, 1)
+            case .frierend:   return (0.2, 1.8)
             case .warnend:    return (0.35, 0.8)
             default:          return (0, 1)
             }
@@ -590,9 +652,7 @@ struct DuckView: View {
         blinkTask?.cancel()
         blinkTask = Task { @MainActor in
             while !Task.isCancelled {
-                let interval = state == .frierend
-                    ? Double.random(in: 1...2.5)
-                    : Double.random(in: 2.5...5)
+                let interval = Double.random(in: 2.5...5)
                 try? await Task.sleep(for: .seconds(interval))
                 guard !Task.isCancelled else { break }
 
@@ -603,7 +663,7 @@ struct DuckView: View {
                 withAnimation(.easeInOut(duration: 0.08)) { blinkScale = 1 }
 
                 // Occasional double-blink
-                if Bool.random() && state != .frierend {
+                if Bool.random() {
                     try? await Task.sleep(for: .milliseconds(200))
                     guard !Task.isCancelled else { break }
                     withAnimation(.easeInOut(duration: 0.05)) { blinkScale = 0.05 }
@@ -674,16 +734,14 @@ struct DuckPinView: View {
         ZStack {
             Circle()
                 .fill(.white)
-                .frame(width: 6, height: state == .frierend ? 3.5 : 6)
-            if state != .frierend {
-                Circle()
-                    .fill(Color(white: 0.1))
-                    .frame(width: 3.5, height: 3.5)
-                Circle()
-                    .fill(.white)
-                    .frame(width: 1.5, height: 1.5)
-                    .offset(x: 0.5, y: -0.8)
-            }
+                .frame(width: 6, height: 6)
+            Circle()
+                .fill(Color(white: 0.1))
+                .frame(width: 3.5, height: 3.5)
+            Circle()
+                .fill(.white)
+                .frame(width: 1.5, height: 1.5)
+                .offset(x: 0.5, y: -0.8)
         }
     }
 }
