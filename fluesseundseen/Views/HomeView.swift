@@ -29,6 +29,7 @@ struct HomeView: View {
     @State private var displayTotalCount: Int = 0
     @State private var cachedGoodScoreCount: Int = 0
     @State private var cachedAverageScore: SwimScore? = nil
+    @State private var cachedNearbyAverageScore: SwimScore? = nil
     @State private var visibleCount: Int = 20        // progressive pagination
     @State private var updateTask: Task<Void, Never>?
     @State private var sectionsVisible = false
@@ -139,13 +140,12 @@ struct HomeView: View {
 
     private var heroState: DuckState {
         if dataService.isLoading { return .zufrieden }
+        if let avg = cachedNearbyAverageScore { return avg.duckState }
         if let avg = cachedAverageScore { return avg.duckState }
-        if Season.isOffSeason { return season.duckState }
         return .zufrieden
     }
 
     private var heroGreeting: String {
-        if Season.isOffSeason { return season.heroTitle }
         let hour = Calendar.current.component(.hour, from: Date())
         if hour < 6  { return "Gute Nacht!" }
         if hour < 12 { return "Guten Morgen!" }
@@ -155,7 +155,6 @@ struct HomeView: View {
 
     private var heroMessage: String {
         if dataService.isLoading { return "Ducky schnüffelt am Wasser..." }
-        if Season.isOffSeason { return season.heroMessage }
 
         let total = dataService.lakes.count
         if total == 0 { return "Entdecke Österreichs schönste Badegewässer!" }
@@ -250,6 +249,26 @@ struct HomeView: View {
                 cachedAverageScore = scored.min { abs($0.total - avgTotal) < abs($1.total - avgTotal) }
             } else {
                 cachedAverageScore = nil
+            }
+
+            // Nearby average: 5 closest lakes → drives home screen Ducky state
+            if let userLocation = locationService.userLocation {
+                let nearbyScored = allLakes
+                    .map { ($0, $0.distance(from: userLocation)) }
+                    .sorted { $0.1 < $1.1 }
+                    .prefix(5)
+                    .compactMap { entry -> SwimScore? in
+                        guard cache[entry.0.id] != nil else { return nil }
+                        return entry.0.swimScore(weather: cache[entry.0.id])
+                    }
+                if !nearbyScored.isEmpty {
+                    let avgTotal = nearbyScored.map(\.total).reduce(0, +) / Double(nearbyScored.count)
+                    cachedNearbyAverageScore = nearbyScored.min { abs($0.total - avgTotal) < abs($1.total - avgTotal) }
+                } else {
+                    cachedNearbyAverageScore = nil
+                }
+            } else {
+                cachedNearbyAverageScore = nil
             }
         }
     }
@@ -410,16 +429,13 @@ struct HomeView: View {
 
     private var heroSection: some View {
         ZStack(alignment: .bottom) {
-            ZStack {
-                season.heroGradient
-                SeasonalOverlay(season: season)
-            }
-            .frame(height: 310)
-            .clipShape(
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-            )
-            .padding(.horizontal, 16)
-            .shadow(color: season.heroGradientColors.last?.opacity(0.25) ?? AppTheme.oceanBlue.opacity(0.2), radius: 20, y: 10)
+            AppTheme.detailHeroGradient(for: heroState.scoreLevel, isDark: false)
+                .frame(height: 310)
+                .clipShape(
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                )
+                .padding(.horizontal, 16)
+                .shadow(color: AppTheme.scoreColor(for: heroState.scoreLevel).opacity(0.28), radius: 20, y: 10)
 
             VStack(spacing: 10) {
                 ZStack {
@@ -431,19 +447,13 @@ struct HomeView: View {
                 }
                 .frame(height: 130)
 
-                HStack(spacing: 6) {
-                    if Season.isOffSeason {
-                        Image(systemName: season.heroIcon)
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    Text(heroGreeting)
-                        .font(.system(size: Season.isOffSeason ? 20 : 14, weight: Season.isOffSeason ? .heavy : .semibold, design: .rounded))
-                }
-                .foregroundStyle(.white.opacity(Season.isOffSeason ? 1.0 : 0.75))
+                Text(heroGreeting)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.75))
 
                 Text(heroMessage)
-                    .font(.system(size: Season.isOffSeason ? 15 : 17, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(Season.isOffSeason ? 0.85 : 1.0))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .lineSpacing(3)
                     .padding(.horizontal, 20)
