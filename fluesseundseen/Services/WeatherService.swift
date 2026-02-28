@@ -2,6 +2,15 @@ import Foundation
 import CoreLocation
 import Observation
 
+struct ForecastDay {
+    let date: String              // "2026-02-27"
+    let weatherCode: Int
+    let conditionSymbol: String
+    let conditionDescription: String
+    let tempMax: Double
+    let tempMin: Double
+}
+
 struct LakeWeather {
     let airTemperature: Double?
     let uvIndex: Int?
@@ -11,6 +20,29 @@ struct LakeWeather {
     let windSpeed: Double?               // km/h
     let precipitationProbability: Int?   // 0–100%
     let weatherCode: Int?                // WMO code
+    let forecast: [ForecastDay]          // up to 5 days starting today
+
+    init(
+        airTemperature: Double? = nil,
+        uvIndex: Int? = nil,
+        conditionSymbol: String,
+        conditionDescription: String,
+        feelsLike: Double? = nil,
+        windSpeed: Double? = nil,
+        precipitationProbability: Int? = nil,
+        weatherCode: Int? = nil,
+        forecast: [ForecastDay] = []
+    ) {
+        self.airTemperature = airTemperature
+        self.uvIndex = uvIndex
+        self.conditionSymbol = conditionSymbol
+        self.conditionDescription = conditionDescription
+        self.feelsLike = feelsLike
+        self.windSpeed = windSpeed
+        self.precipitationProbability = precipitationProbability
+        self.weatherCode = weatherCode
+        self.forecast = forecast
+    }
 }
 
 // @MainActor ensures all cache reads/writes are serialized on the main thread,
@@ -225,7 +257,7 @@ final class WeatherService {
 
     /// Static so it's nonisolated and can run truly off the MainActor in task groups.
     private static func networkFetch(for lake: BathingWater) async -> LakeWeather? {
-        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(lake.latitude)&longitude=\(lake.longitude)&current=temperature_2m,apparent_temperature,weather_code,uv_index,wind_speed_10m,precipitation&timezone=auto"
+        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(lake.latitude)&longitude=\(lake.longitude)&current=temperature_2m,apparent_temperature,weather_code,uv_index,wind_speed_10m,precipitation&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=5&timezone=auto"
         guard let url = URL(string: urlString) else { return nil }
 
         do {
@@ -242,6 +274,29 @@ final class WeatherService {
             let windSpeed = current["wind_speed_10m"] as? Double
             let precipitation = current["precipitation"] as? Double
 
+            // Parse 5-day daily forecast
+            var forecastDays: [ForecastDay] = []
+            if let daily = json["daily"] as? [String: Any],
+               let times = daily["time"] as? [String] {
+                let codes = (daily["weather_code"] as? [Int])
+                    ?? (daily["weather_code"] as? [Double])?.map(Int.init)
+                    ?? []
+                let maxTemps = daily["temperature_2m_max"] as? [Double] ?? []
+                let minTemps = daily["temperature_2m_min"] as? [Double] ?? []
+                let count = min(times.count, 5)
+                for i in 0..<count {
+                    let code = i < codes.count ? codes[i] : 0
+                    forecastDays.append(ForecastDay(
+                        date: times[i],
+                        weatherCode: code,
+                        conditionSymbol: symbolForWMOCode(code),
+                        conditionDescription: descriptionForWMOCode(code),
+                        tempMax: i < maxTemps.count ? maxTemps[i] : 0,
+                        tempMin: i < minTemps.count ? minTemps[i] : 0
+                    ))
+                }
+            }
+
             return LakeWeather(
                 airTemperature: airTemp,
                 uvIndex: uvDouble.map { Int($0.rounded()) },
@@ -250,7 +305,8 @@ final class WeatherService {
                 feelsLike: feelsLike,
                 windSpeed: windSpeed,
                 precipitationProbability: precipitation.map { $0 > 0 ? 80 : 0 },
-                weatherCode: weatherCode
+                weatherCode: weatherCode,
+                forecast: forecastDays
             )
         } catch {
             return nil
@@ -283,6 +339,13 @@ final class WeatherService {
             if let ws = w.windSpeed { dict["windSpeed"] = ws }
             if let pp = w.precipitationProbability { dict["precip"] = pp }
             if let wc = w.weatherCode { dict["weatherCode"] = wc }
+            if !w.forecast.isEmpty {
+                dict["forecast"] = w.forecast.map { day -> [String: Any] in
+                    ["date": day.date, "wc": day.weatherCode,
+                     "sym": day.conditionSymbol, "fdesc": day.conditionDescription,
+                     "max": day.tempMax, "min": day.tempMin]
+                }
+            }
             serializable[key] = dict
         }
         let payload: [String: Any] = [
@@ -306,6 +369,21 @@ final class WeatherService {
         cacheTimestamp = Date(timeIntervalSinceReferenceDate: timestamp)
 
         for (key, d) in dict {
+            var forecastDays: [ForecastDay] = []
+            if let fArr = d["forecast"] as? [[String: Any]] {
+                forecastDays = fArr.compactMap { f -> ForecastDay? in
+                    guard let date = f["date"] as? String,
+                          let wc   = f["wc"]   as? Int,
+                          let sym  = f["sym"]  as? String,
+                          let desc = f["fdesc"] as? String,
+                          let max  = f["max"]  as? Double,
+                          let min  = f["min"]  as? Double
+                    else { return nil }
+                    return ForecastDay(date: date, weatherCode: wc,
+                                       conditionSymbol: sym, conditionDescription: desc,
+                                       tempMax: max, tempMin: min)
+                }
+            }
             weatherCache[key] = LakeWeather(
                 airTemperature: d["airTemp"] as? Double,
                 uvIndex: d["uv"] as? Int,
@@ -314,7 +392,8 @@ final class WeatherService {
                 feelsLike: d["feelsLike"] as? Double,
                 windSpeed: d["windSpeed"] as? Double,
                 precipitationProbability: d["precip"] as? Int,
-                weatherCode: d["weatherCode"] as? Int
+                weatherCode: d["weatherCode"] as? Int,
+                forecast: forecastDays
             )
         }
         cacheRevision &+= 1

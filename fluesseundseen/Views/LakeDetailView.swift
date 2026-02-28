@@ -805,6 +805,13 @@ struct LakeDetailView: View {
                     )
                 }
             }
+
+            // 5-day forecast strip
+            if !weather.forecast.isEmpty {
+                Divider()
+                    .padding(.top, 2)
+                forecastStrip(weather.forecast)
+            }
         }
         .appCard()
         .background(
@@ -841,6 +848,52 @@ struct LakeDetailView: View {
         .background(color.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
+    // MARK: - Forecast Strip
+
+    private func forecastStrip(_ days: [ForecastDay]) -> some View {
+        HStack(spacing: 0) {
+            ForEach(Array(days.enumerated()), id: \.offset) { index, day in
+                VStack(spacing: 5) {
+                    Text(index == 0 ? "Heute" : index == 1 ? "Morgen" : dayAbbreviation(from: day.date))
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.textSecondary)
+
+                    Image(systemName: day.conditionSymbol)
+                        .font(.system(size: 17))
+                        .symbolRenderingMode(.multicolor)
+                        .frame(height: 22)
+
+                    Text(String(format: "%.0f°", day.tempMax))
+                        .font(.system(size: 13, weight: .heavy, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+
+                    Text(String(format: "%.0f°", day.tempMin))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(AppTheme.textSecondary.opacity(0.65))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(
+                    index == 0
+                        ? AppTheme.skyBlue.opacity(0.10)
+                        : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+            }
+        }
+    }
+
+    private func dayAbbreviation(from dateString: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "de_AT")
+        guard let date = formatter.date(from: dateString) else { return "" }
+        let dayFormatter = DateFormatter()
+        dayFormatter.dateFormat = "EEE"
+        dayFormatter.locale = Locale(identifier: "de_AT")
+        return dayFormatter.string(from: date).capitalized
+    }
+
     // MARK: - Gesundheit Card (Wasserqualität + Bakteriologie + Sichttiefe)
 
     private var gesundheitCard: some View {
@@ -859,22 +912,55 @@ struct LakeDetailView: View {
             .padding(.bottom, 14)
 
             // ── Wasserqualität ──────────────────────────────────────────
-            VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(lake.qualityColor)
+                Text("Wasserqualität")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Spacer()
+                Text(lake.qualityLabel)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(lake.qualityColor)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(lake.qualityColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            // ── Sichttiefe (optional) ──────────────────────────────────
+            if let depth = lake.visibilityDepth {
+                Divider()
+                    .padding(.vertical, 12)
+
                 HStack(spacing: 8) {
-                    Image(systemName: "checkmark.shield.fill")
+                    Image(systemName: "eye.fill")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(lake.qualityColor)
-                    Text("Wasserqualität")
+                        .foregroundStyle(AppTheme.skyBlue)
+                    Text("Sichttiefe")
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
                     Spacer()
-                    Text(lake.qualityLabel)
+                    Text(String(format: "%.1f m", depth))
                         .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(lake.qualityColor)
+                        .foregroundStyle(AppTheme.skyBlue)
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(AppTheme.divider)
+                            .frame(width: 56, height: 5)
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [AppTheme.skyBlue, AppTheme.oceanBlue],
+                                    startPoint: .leading, endPoint: .trailing
+                                )
+                            )
+                            .frame(width: min(CGFloat(depth / 8.0) * 56, 56), height: 5)
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(lake.qualityColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(AppTheme.skyBlue.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
 
             Divider()
@@ -917,44 +1003,6 @@ struct LakeDetailView: View {
                     status: lake.enterococciStatus,
                     showValue: showBacteriaValues
                 )
-            }
-
-            // ── Sichttiefe (optional) ──────────────────────────────────
-            if let depth = lake.visibilityDepth {
-                Divider()
-                    .padding(.vertical, 12)
-
-                HStack(spacing: 12) {
-                    Image(systemName: "eye.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(AppTheme.skyBlue)
-                        .frame(width: 28, height: 28)
-                        .background(AppTheme.skyBlue.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                    Text("Sichttiefe")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppTheme.textPrimary)
-
-                    Spacer()
-
-                    Text(String(format: "%.1f m", depth))
-                        .font(.system(size: 13, weight: .heavy, design: .rounded))
-                        .foregroundStyle(AppTheme.skyBlue)
-
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(AppTheme.divider)
-                            .frame(width: 64, height: 6)
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [AppTheme.skyBlue, AppTheme.oceanBlue],
-                                    startPoint: .leading, endPoint: .trailing
-                                )
-                            )
-                            .frame(width: min(CGFloat(depth / 8.0) * 64, 64), height: 6)
-                    }
-                }
             }
 
             // ── Footer: date + attribution ─────────────────────────────
@@ -1004,24 +1052,15 @@ struct LakeDetailView: View {
     // MARK: - Map Card
 
     private var mapCard: some View {
-        ZStack(alignment: .topLeading) {
-            Map {
-                Marker(lake.displayName, coordinate: lake.coordinate)
-                    .tint(AppTheme.oceanBlue)
-            }
-            .allowsHitTesting(false)
-
-            HStack(spacing: 6) {
-                Image(systemName: "map.fill")
-                Text("Standort")
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-            }
-            .foregroundStyle(AppTheme.oceanBlue)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(AppTheme.cardBackground.opacity(0.92), in: Capsule())
-            .padding(10)
+        Map(initialPosition: .region(MKCoordinateRegion(
+            center: lake.coordinate,
+            latitudinalMeters: 3_500,
+            longitudinalMeters: 3_500
+        ))) {
+            Marker(lake.displayName, coordinate: lake.coordinate)
+                .tint(AppTheme.oceanBlue)
         }
+        .allowsHitTesting(false)
         .frame(height: 180)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
         .shadow(color: .black.opacity(0.06), radius: 12, y: 4)
