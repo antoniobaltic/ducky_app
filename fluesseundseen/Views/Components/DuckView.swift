@@ -240,7 +240,7 @@ struct DuckView: View {
         case .zufrieden:  return 14 * s
         case .zoegernd:   return 13 * s
         case .frierend:   return 13 * s
-        case .warnend:    return 14 * s
+        case .warnend:    return 15 * s
         }
     }
 
@@ -250,7 +250,7 @@ struct DuckView: View {
         case .zufrieden:  return 12 * s
         case .zoegernd:   return 13 * s
         case .frierend:   return 11 * s
-        case .warnend:    return 13 * s
+        case .warnend:    return 16 * s
         }
     }
 
@@ -260,7 +260,7 @@ struct DuckView: View {
         case .zufrieden:  return 5.5 * s
         case .zoegernd:   return 5 * s
         case .frierend:   return 4.5 * s
-        case .warnend:    return 4 * s
+        case .warnend:    return 3.5 * s
         }
     }
 
@@ -273,7 +273,7 @@ struct DuckView: View {
 
     private var pupilOffsetY: CGFloat {
         switch state {
-        case .warnend: return -0.5 * s
+        case .warnend: return -2.5 * s
         default:       return 0.5 * s
         }
     }
@@ -294,7 +294,7 @@ struct DuckView: View {
     private var eyebrowOpacity: Double {
         switch state {
         case .warnend:  return 0.7
-        case .zoegernd: return 0.5
+        case .zoegernd: return 0.35
         case .frierend: return 0.65
         default:        return 0
         }
@@ -303,7 +303,7 @@ struct DuckView: View {
     private func eyebrowAngle(isLeft: Bool) -> Double {
         switch state {
         case .warnend:  return isLeft ? -20 : 20
-        case .zoegernd: return isLeft ? 15 : -5
+        case .zoegernd: return isLeft ? 12 : -3
         case .frierend: return isLeft ? 20 : -20
         default:        return 0
         }
@@ -428,6 +428,7 @@ struct DuckView: View {
     private var beakOpenAmount: CGFloat {
         switch state {
         case .begeistert: return 4 * s
+        case .warnend:    return 5 * s
         case .zoegernd:   return 1.5 * s
         default:          return 0
         }
