@@ -177,7 +177,7 @@ extension LakeContentService {
             URLQueryItem(name: "inprop", value: "url"),
             URLQueryItem(name: "exintro", value: "1"),
             URLQueryItem(name: "explaintext", value: "1"),
-            URLQueryItem(name: "exsentences", value: "4")
+            URLQueryItem(name: "exsentences", value: "5")
         ]
         guard let url = components.url else { return nil }
 
@@ -272,7 +272,7 @@ extension LakeContentService {
         var sentenceEnd: [String.Index] = []
         for idx in compact.indices where ".!?".contains(compact[idx]) {
             sentenceEnd.append(compact.index(after: idx))
-            if sentenceEnd.count == 2 { break }
+            if sentenceEnd.count == 3 { break }
         }
 
         var summary: String
@@ -282,8 +282,8 @@ extension LakeContentService {
             summary = compact
         }
 
-        if summary.count > 340 {
-            let limit = summary.index(summary.startIndex, offsetBy: 340)
+        if summary.count > 500 {
+            let limit = summary.index(summary.startIndex, offsetBy: 500)
             var clipped = String(summary[..<limit])
             if let lastSpace = clipped.lastIndex(of: " ") {
                 clipped = String(clipped[..<lastSpace])
