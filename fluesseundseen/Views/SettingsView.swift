@@ -1,8 +1,17 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @Environment(\.dismiss) private var dismiss
+    @Environment(DataService.self) private var dataService
+    @Environment(WeatherService.self) private var weatherService
+
+    @AppStorage("preferredStartTab") private var preferredStartTab = 0
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+
+    @State private var isRefreshingData = false
+    @State private var isClearingCache = false
+    @State private var showClearCacheAlert = false
+    @State private var showResetOnboardingAlert = false
 
     var body: some View {
         NavigationStack {
@@ -11,7 +20,9 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(spacing: 28) {
-                        appearanceSection
+                        startupSection
+                        dataAndCacheSection
+                        onboardingSection
                         infoSection
                     }
                     .padding(.top, 8)
@@ -27,65 +38,116 @@ struct SettingsView: View {
                         .foregroundStyle(AppTheme.oceanBlue)
                 }
             }
+            .alert("Cache wirklich leeren?", isPresented: $showClearCacheAlert) {
+                Button("Abbrechen", role: .cancel) {}
+                Button("Cache leeren", role: .destructive) {
+                    clearCache()
+                }
+            } message: {
+                Text("Gespeicherte Gewässer- und Wetterdaten werden entfernt. Die App lädt sie beim nächsten Aktualisieren neu.")
+            }
+            .alert("Onboarding wiederholen?", isPresented: $showResetOnboardingAlert) {
+                Button("Abbrechen", role: .cancel) {}
+                Button("Wiederholen", role: .destructive) {
+                    hasCompletedOnboarding = false
+                    dismiss()
+                }
+            } message: {
+                Text("Das Intro wird jetzt sofort erneut angezeigt.")
+            }
         }
     }
 
-    // MARK: - Appearance Section
+    // MARK: - Startup Section
 
-    private var appearanceSection: some View {
+    private var startupSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Image(systemName: "paintbrush.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppTheme.lavender)
-                Text("Erscheinungsbild")
-                    .font(AppTheme.sectionTitle)
+            sectionHeader(icon: "rectangle.3.group.fill", title: "Start")
+                .padding(.horizontal, 20)
+
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Start-Tab beim App-Start")
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(AppTheme.textPrimary)
+
+                Picker("Start-Tab beim App-Start", selection: $preferredStartTab) {
+                    Text("Home").tag(0)
+                    Text("Karte").tag(1)
+                    Text("Favoriten").tag(2)
+                }
+                .pickerStyle(.segmented)
             }
-            .padding(.horizontal, 20)
+            .appCard()
+            .padding(.horizontal, 16)
+        }
+    }
 
-            VStack(spacing: 0) {
-                ForEach(Array(AppearanceMode.allCases.enumerated()), id: \.element.id) { index, mode in
-                    Button {
-                        withAnimation(AppTheme.quickSpring) {
-                            appearanceMode = mode
-                        }
-                    } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: mode.icon)
-                                .font(.system(size: 20))
-                                .foregroundStyle(mode == appearanceMode ? AppTheme.oceanBlue : AppTheme.textSecondary)
-                                .frame(width: 32)
+    // MARK: - Data Section
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(mode.label)
-                                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                                    .foregroundStyle(AppTheme.textPrimary)
+    private var dataAndCacheSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeader(icon: "externaldrive.fill", title: "Daten & Cache")
+                .padding(.horizontal, 20)
 
-                                Text(mode.subtitle)
-                                    .font(.system(size: 12, weight: .regular, design: .rounded))
-                                    .foregroundStyle(AppTheme.textSecondary)
-                            }
+            VStack(spacing: 14) {
+                settingRow(
+                    icon: "clock.fill",
+                    label: "Letztes Update",
+                    value: lastUpdateText,
+                    color: AppTheme.skyBlue
+                )
 
-                            Spacer()
+                Divider()
 
-                            if mode == appearanceMode {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(AppTheme.oceanBlue)
-                            }
-                        }
-                        .padding(16)
+                HStack(spacing: 10) {
+                    actionButton(
+                        title: "Jetzt aktualisieren",
+                        systemImage: "arrow.clockwise",
+                        color: AppTheme.oceanBlue,
+                        isLoading: isRefreshingData
+                    ) {
+                        refreshNow()
                     }
-                    .buttonStyle(.plain)
+                    .disabled(isRefreshingData || isClearingCache)
 
-                    if index < AppearanceMode.allCases.count - 1 {
-                        Divider().padding(.leading, 62)
+                    actionButton(
+                        title: "Cache leeren",
+                        systemImage: "trash.fill",
+                        color: AppTheme.coral
+                    ) {
+                        showClearCacheAlert = true
                     }
+                    .disabled(isRefreshingData || isClearingCache)
                 }
             }
-            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
-            .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+            .appCard()
+            .padding(.horizontal, 16)
+        }
+    }
+
+    // MARK: - Onboarding Section
+
+    private var onboardingSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeader(icon: "sparkles", title: "Onboarding")
+                .padding(.horizontal, 20)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Button {
+                    showResetOnboardingAlert = true
+                } label: {
+                    Label("Onboarding wiederholen", systemImage: "arrow.counterclockwise.circle.fill")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AppTheme.oceanBlue)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 12)
+                        .background(AppTheme.oceanBlue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(isRefreshingData || isClearingCache)
+            }
+            .appCard()
             .padding(.horizontal, 16)
         }
     }
@@ -94,15 +156,8 @@ struct SettingsView: View {
 
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Image(systemName: "info.circle.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppTheme.teal)
-                Text("Info")
-                    .font(AppTheme.sectionTitle)
-                    .foregroundStyle(AppTheme.textPrimary)
-            }
-            .padding(.horizontal, 20)
+            sectionHeader(icon: "info.circle.fill", title: "Info")
+                .padding(.horizontal, 20)
 
             VStack(spacing: 0) {
                 infoRow(icon: "drop.fill", label: "Daten", value: "AGES Badegewässer", color: AppTheme.oceanBlue)
@@ -111,10 +166,109 @@ struct SettingsView: View {
                 Divider().padding(.leading, 62)
                 infoRow(icon: "swift", label: "Version", value: "1.0.0", color: AppTheme.coral)
             }
-            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
-            .shadow(color: .black.opacity(0.05), radius: 10, y: 3)
+            .appCard(padding: 0)
             .padding(.horizontal, 16)
         }
+    }
+
+    private var lastUpdateText: String {
+        guard let lastUpdateDate else { return "Noch nicht verfügbar" }
+        return Self.lastUpdateFormatter.string(from: lastUpdateDate)
+    }
+
+    private var lastUpdateDate: Date? {
+        [dataService.lastUpdated, weatherService.lastCacheUpdate].compactMap { $0 }.max()
+    }
+
+    private static let lastUpdateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "de_AT")
+        formatter.dateFormat = "d. MMM yyyy\n'um' HH:mm"
+        formatter.shortMonthSymbols = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"]
+        return formatter
+    }()
+
+    private func refreshNow() {
+        guard !isRefreshingData else { return }
+        isRefreshingData = true
+
+        Task {
+            await dataService.refresh()
+            let lakes = dataService.lakes
+            if !lakes.isEmpty {
+                await weatherService.hydrateAllWeather(for: lakes, forceRefresh: true)
+            }
+            isRefreshingData = false
+        }
+    }
+
+    private func clearCache() {
+        guard !isClearingCache else { return }
+        isClearingCache = true
+
+        dataService.clearCache()
+        weatherService.clearCache()
+        isClearingCache = false
+    }
+
+    private func sectionHeader(icon: String, title: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AppTheme.teal)
+            Text(title)
+                .font(AppTheme.sectionTitle)
+                .foregroundStyle(AppTheme.textPrimary)
+        }
+    }
+
+    private func settingRow(icon: String, label: String, value: String, color: Color) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(color)
+                .frame(width: 28)
+
+            Text(label)
+                .font(.system(size: 16, weight: .medium, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+
+            Spacer()
+
+            Text(value)
+                .font(.system(size: 14, weight: .regular, design: .rounded))
+                .foregroundStyle(AppTheme.textSecondary)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func actionButton(
+        title: String,
+        systemImage: String,
+        color: Color,
+        isLoading: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(color)
+                } else {
+                    Image(systemName: systemImage)
+                }
+                Text(title)
+                    .lineLimit(1)
+            }
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
+            .foregroundStyle(color)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .padding(.horizontal, 10)
+            .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private func infoRow(icon: String, label: String, value: String, color: Color) -> some View {
@@ -138,18 +292,8 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - AppearanceMode Subtitle
-
-extension AppearanceMode {
-    var subtitle: String {
-        switch self {
-        case .system: return "Folgt den Geräteeinstellungen"
-        case .light: return "Immer heller Hintergrund"
-        case .dark: return "Immer dunkler Hintergrund"
-        }
-    }
-}
-
 #Preview {
     SettingsView()
+        .environment(DataService.shared)
+        .environment(WeatherService.shared)
 }

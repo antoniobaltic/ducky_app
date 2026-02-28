@@ -122,11 +122,13 @@ struct LakeListRow: View {
         HStack(spacing: 14) {
             SwimScoreBadge(score: lake.swimScore(weather: weather), size: .medium)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(lake.displayName)
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     if isFavourite {
                         Image(systemName: "heart.fill")
                             .font(.system(size: 10))
@@ -142,47 +144,55 @@ struct LakeListRow: View {
                     }
                 }
 
-                ViewThatFits(in: .horizontal) {
-                    metadataLine
-                    metadataFallbackStack
-                }
+                metadataLine
+
+                weatherRow
             }
+            .layoutPriority(1)
 
-            Spacer()
-
-            // Temperatures column: Air first, Water second
-            VStack(alignment: .trailing, spacing: 5) {
-                if let weather, let airTemp = weather.airTemperature {
-                    HStack(spacing: 3) {
-                        Image(systemName: "wind")
-                            .font(.system(size: 10))
-                            .foregroundStyle(AppTheme.airTempGreen)
-                        Text(String(format: "%.0f°C", airTemp))
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppTheme.airTempGreen)
-                    }
-                }
-
-                if let waterTemp = lake.currentWaterTemperature {
-                    HStack(spacing: 3) {
-                        Image(systemName: "drop.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(AppTheme.skyBlue)
-                        Text(String(format: "%.0f°C", waterTemp))
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppTheme.textPrimary)
-                    }
-                } else {
-                    Text("Wasser: –")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-            }
+            Spacer(minLength: 0)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .task {
             weather = await weatherService.fetchWeather(for: lake)
+        }
+    }
+
+    private var weatherRow: some View {
+        HStack(spacing: 6) {
+            weatherConditionPill
+            temperatureChip(
+                icon: "wind",
+                iconColor: AppTheme.airTempGreen,
+                value: weather?.airTemperature.map { String(format: "%.0f°C", $0) } ?? "-"
+            )
+            temperatureChip(
+                icon: "drop.fill",
+                iconColor: AppTheme.oceanBlue,
+                value: lake.currentWaterTemperature.map { String(format: "%.0f°C", $0) } ?? "-"
+            )
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var weatherConditionPill: some View {
+        Group {
+            if let weather {
+                quickConditionChip(
+                    icon: weather.conditionSymbol,
+                    value: weather.conditionDescription,
+                    color: weatherConditionChipStyle(for: weather)
+                )
+            } else {
+                quickConditionChip(
+                    icon: "cloud.fill",
+                    value: "Unbekannt",
+                    color: AppTheme.textSecondary
+                )
+            }
         }
     }
 
@@ -195,16 +205,6 @@ struct LakeListRow: View {
                         .foregroundStyle(.tertiary)
                 }
                 distanceChip
-            }
-        }
-    }
-
-    private var metadataFallbackStack: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            locationTextLine
-            HStack(spacing: 0) {
-                distanceChip
-                Spacer(minLength: 0)
             }
         }
     }
@@ -237,6 +237,63 @@ struct LakeListRow: View {
         let hasMunicipality = !(lake.municipality?.isEmpty ?? true)
         let hasState = !(lake.shortStateLabel?.isEmpty ?? true)
         return hasMunicipality || hasState
+    }
+
+    private func temperatureChip(icon: String, iconColor: Color, value: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(iconColor)
+            Text(value)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(iconColor.opacity(0.10), in: Capsule())
+    }
+
+    private func weatherConditionChipStyle(for weather: LakeWeather) -> Color {
+        guard let code = weather.weatherCode else {
+            return AppTheme.textSecondary
+        }
+
+        switch code {
+        case 0, 1:
+            return AppTheme.sunshine
+        case 2, 3:
+            return AppTheme.textSecondary
+        case 45, 48:
+            return AppTheme.textSecondary
+        case 51, 53, 55:
+            return AppTheme.skyBlue
+        case 56, 57, 66, 67:
+            return AppTheme.lavender
+        case 61, 63, 65, 80, 81, 82:
+            return AppTheme.oceanBlue
+        case 71, 73, 75, 77, 85, 86:
+            return AppTheme.lightBlue
+        case 95, 96, 99:
+            return AppTheme.coral
+        default:
+            return AppTheme.textSecondary
+        }
+    }
+
+    private func quickConditionChip(icon: String, value: String, color: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(color)
+            Text(value)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(color.opacity(0.10), in: Capsule())
     }
 
     @ViewBuilder

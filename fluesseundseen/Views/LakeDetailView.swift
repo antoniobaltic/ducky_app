@@ -4,7 +4,6 @@ import MapKit
 
 struct LakeDetailView: View {
     let lake: BathingWater
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
     @Environment(LocationService.self) private var locationService
@@ -82,6 +81,20 @@ struct LakeDetailView: View {
         heroQuotes(for: level).randomElement() ?? currentScore.duckState.line
     }
 
+    private var quoteBaseColor: Color {
+        AppTheme.scoreColor(for: currentScore.level)
+    }
+
+    private var quoteAccentColor: Color {
+        switch currentScore.level {
+        case .perfekt: return AppTheme.sunshine
+        case .gut: return AppTheme.skyBlue
+        case .mittel: return AppTheme.sunshine
+        case .schlecht: return AppTheme.lightBlue
+        case .warnung: return AppTheme.sunshine.opacity(0.85)
+        }
+    }
+
     private var heroTextPrimary: Color { .black.opacity(0.88) }
     private var heroTextSecondary: Color { .black.opacity(0.70) }
 
@@ -95,11 +108,11 @@ struct LakeDetailView: View {
         .background(
             ZStack(alignment: .top) {
                 AppTheme.pageGradient
-                AppTheme.detailPageGradient(for: currentScore.level, isDark: colorScheme == .dark)
+                AppTheme.detailPageGradient(for: currentScore.level, isDark: false)
                 BubbleBackground(color: AppTheme.scoreColor(for: currentScore.level))
-                    .opacity(colorScheme == .dark ? 0.14 : 0.20)
+                    .opacity(0.20)
                 LinearGradient(
-                    colors: [.clear, AppTheme.pageBackground.opacity(colorScheme == .dark ? 0.90 : 0.80)],
+                    colors: [.clear, AppTheme.pageBackground.opacity(0.80)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -268,11 +281,33 @@ struct LakeDetailView: View {
                     .scaleEffect(appear ? 1 : 0.7)
                     .opacity(appear ? 1 : 0)
 
-                Text("\u{201E}\(heroQuote)\u{201C}")
+                Text(heroQuote)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(heroTextPrimary)
-                    .italic()
+                    .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        quoteBaseColor.opacity(0.54),
+                                        quoteAccentColor.opacity(0.42),
+                                        quoteBaseColor.opacity(0.40)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(.white.opacity(0.34), lineWidth: 1)
+                    )
+                    .shadow(color: quoteBaseColor.opacity(0.32), radius: 7, y: 3)
+                    .shadow(color: .black.opacity(0.10), radius: 1, y: 1)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .center)
@@ -282,7 +317,7 @@ struct LakeDetailView: View {
         .padding(.horizontal, 24)
         .background {
             ZStack(alignment: .bottom) {
-                AppTheme.detailHeroGradient(for: currentScore.level, isDark: colorScheme == .dark)
+                AppTheme.detailHeroGradient(for: currentScore.level, isDark: false)
 
                 // Floating bubbles
                 FloatingBubblesView(count: 5, color: .white.opacity(0.25))
@@ -822,8 +857,7 @@ struct LakeDetailView: View {
                         icon: "wind",
                         value: String(format: "%.0f°C", airTemp),
                         label: "Lufttemperatur",
-                        color: AppTheme.airTempGreen,
-                        valueColor: AppTheme.airTempGreen
+                        color: AppTheme.airTempGreen
                     )
                 }
                 if let uv = weather.uvIndex {
@@ -1265,17 +1299,5 @@ struct CardView<Content: View>: View {
             .environment(LakeContentService.shared)
             .environment(LakePlaceService.shared)
             .modelContainer(for: FavouriteItem.self, inMemory: true)
-    }
-}
-
-#Preview("Dark Mode") {
-    NavigationStack {
-        LakeDetailView(lake: .preview)
-            .environment(LocationService.shared)
-            .environment(WeatherService.shared)
-            .environment(LakeContentService.shared)
-            .environment(LakePlaceService.shared)
-            .modelContainer(for: FavouriteItem.self, inMemory: true)
-            .preferredColorScheme(.dark)
     }
 }

@@ -134,13 +134,21 @@ struct ScorePinView: View {
             // Pin shape
             Circle()
                 .fill(AppTheme.scoreColor(for: score.level))
-                .frame(width: 32, height: 32)
+                .frame(width: 36, height: 36)
                 .shadow(color: AppTheme.scoreColor(for: score.level).opacity(0.4), radius: 4, y: 2)
 
-            Text(String(format: "%.0f", score.total))
-                .font(.system(size: 13, weight: .bold, design: .rounded))
+            Text(scoreText)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .monospacedDigit()
                 .foregroundStyle(.white)
         }
+    }
+
+    private var scoreText: String {
+        if score.total == 10.0 {
+            return "10"
+        }
+        return String(format: "%.1f", score.total)
     }
 }
 

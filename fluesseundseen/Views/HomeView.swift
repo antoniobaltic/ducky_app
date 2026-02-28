@@ -9,9 +9,10 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Query var favourites: [FavouriteItem]
     @State private var selectedLake: BathingWater?
+    @State private var quickActionLake: BathingWater?
+    @State private var shareLake: BathingWater?
     @State private var searchText = ""
     @State private var selectedState: String?
-    @State private var heroAppear = false
     @State private var showSettings = false
     @FocusState private var isSearchFocused: Bool
 
@@ -27,13 +28,13 @@ struct HomeView: View {
     // so that weatherCache updates don't trigger expensive recomputation every frame.
     @State private var displayLakes: [BathingWater] = []
     @State private var displayTotalCount: Int = 0
-    @State private var cachedGoodScoreCount: Int = 0
     @State private var cachedAverageScore: SwimScore? = nil
     @State private var cachedNearbyAverageScore: SwimScore? = nil
     @State private var cachedAverageHeroMessage: String? = nil
     @State private var cachedAverageHeroLevel: SwimScore.Level? = nil
     @State private var visibleCount: Int = 20        // progressive pagination
     @State private var updateTask: Task<Void, Never>?
+    @State private var pendingWeatherDrivenRefresh = false
     @State private var sectionsVisible = false
 
     private struct NearbyPick: Identifiable {
@@ -58,9 +59,9 @@ struct HomeView: View {
 
         var label: String {
             switch self {
-            case .bestScore:    return "Bester Score"
+            case .bestScore:    return "Score"
             case .nearest:      return "Entfernung"
-            case .alphabetical: return "A–Z"
+            case .alphabetical: return "Alphabetisch"
             case .airTemperature: return "Lufttemperatur"
             case .waterTemperature: return "Wassertemperatur"
             }
@@ -73,6 +74,16 @@ struct HomeView: View {
             case .alphabetical: return "textformat.abc"
             case .airTemperature: return "wind"
             case .waterTemperature: return "drop.fill"
+            }
+        }
+
+        var shortLabel: String {
+            switch self {
+            case .bestScore: return "Score"
+            case .nearest: return "Distanz"
+            case .alphabetical: return "A-Z"
+            case .airTemperature: return "Luft"
+            case .waterTemperature: return "Wasser"
             }
         }
 
@@ -127,6 +138,13 @@ struct HomeView: View {
 
     private var activeFilterCount: Int {
         (selectedState != nil ? 1 : 0)
+    }
+
+    private var currentSortPillLabel: String {
+        if sortOption == .alphabetical {
+            return sortDirection == .ascending ? "A-Z" : "Z-A"
+        }
+        return sortOption.shortLabel
     }
 
     private var season: Season { .current }
@@ -211,13 +229,17 @@ struct HomeView: View {
 
     // MARK: - Display Update (debounced, off-render-path)
 
-    /// Recompute displayLakes, hero stats, and pagination.
-    /// `debounce: true` waits 200 ms — coalesces rapid weather cache ticks.
-    private func updateDisplayLakes(debounce: Bool = true) {
+    /// Recompute displayLakes, optional hero stats, and pagination.
+    /// `debounce: true` waits 120 ms — coalesces rapid weather cache ticks.
+    private func updateDisplayLakes(
+        debounce: Bool = true,
+        animated: Bool = false,
+        recomputeHeroStats: Bool = true
+    ) {
         updateTask?.cancel()
         updateTask = Task { @MainActor in
             if debounce {
-                try? await Task.sleep(for: .milliseconds(200))
+                try? await Task.sleep(for: .milliseconds(120))
                 guard !Task.isCancelled else { return }
             }
 
@@ -228,86 +250,112 @@ struct HomeView: View {
             if let state = selectedState {
                 lakes = lakes.filter { $0.state == state }
             }
+
+            let scoreByID = Dictionary(uniqueKeysWithValues: lakes.map { lake in
+                (lake.id, lake.swimScore(weather: cache[lake.id]).total)
+            })
+            let airTempByID = Dictionary(uniqueKeysWithValues: lakes.map { lake in
+                (lake.id, cache[lake.id]?.airTemperature)
+            })
+            let waterTempByID = Dictionary(uniqueKeysWithValues: lakes.map { lake in
+                (lake.id, lake.currentWaterTemperature)
+            })
+            let distanceByID: [String: Double]? = {
+                guard sortOption == .nearest, let loc = locationService.userLocation else { return nil }
+                return Dictionary(uniqueKeysWithValues: lakes.map { ($0.id, $0.distance(from: loc)) })
+            }()
+
+            func sortByNumericValue(
+                _ value: (BathingWater) -> Double,
+                ascending: Bool
+            ) {
+                lakes.sort { a, b in
+                    let lhs = value(a)
+                    let rhs = value(b)
+                    if lhs == rhs {
+                        return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+                    }
+                    return ascending ? lhs < rhs : lhs > rhs
+                }
+            }
+
             switch sortOption {
             case .bestScore:
-                lakes.sort { a, b in
-                    let lhs = a.swimScore(weather: cache[a.id]).total
-                    let rhs = b.swimScore(weather: cache[b.id]).total
-                    return sortDirection == .ascending ? lhs < rhs : lhs > rhs
-                }
+                sortByNumericValue({ scoreByID[$0.id] ?? -.infinity }, ascending: sortDirection == .ascending)
             case .nearest:
-                if let loc = locationService.userLocation {
-                    let distances = Dictionary(uniqueKeysWithValues: lakes.map { ($0.id, $0.distance(from: loc)) })
-                    lakes.sort {
-                        let lhs = distances[$0.id] ?? .infinity
-                        let rhs = distances[$1.id] ?? .infinity
-                        return sortDirection == .ascending ? lhs < rhs : lhs > rhs
-                    }
-                }
+                guard let distances = distanceByID else { break }
+                sortByNumericValue({ distances[$0.id] ?? .infinity }, ascending: sortDirection == .ascending)
             case .alphabetical:
                 lakes.sort {
-                    let cmp = $0.name.localizedCompare($1.name)
+                    let cmp = $0.displayName.localizedCaseInsensitiveCompare($1.displayName)
+                    if cmp == .orderedSame { return $0.id < $1.id }
                     return sortDirection == .ascending ? cmp == .orderedAscending : cmp == .orderedDescending
                 }
             case .airTemperature:
-                lakes.sort {
-                    let lhs = cache[$0.id]?.airTemperature ?? -999
-                    let rhs = cache[$1.id]?.airTemperature ?? -999
-                    return sortDirection == .ascending ? lhs < rhs : lhs > rhs
-                }
+                sortByNumericValue({
+                    let raw = airTempByID[$0.id, default: nil]
+                    return raw ?? (sortDirection == .ascending ? .infinity : -.infinity)
+                }, ascending: sortDirection == .ascending)
             case .waterTemperature:
-                lakes.sort {
-                    let lhs = $0.currentWaterTemperature ?? -999
-                    let rhs = $1.currentWaterTemperature ?? -999
-                    return sortDirection == .ascending ? lhs < rhs : lhs > rhs
-                }
+                sortByNumericValue({
+                    let raw = waterTempByID[$0.id, default: nil]
+                    return raw ?? (sortDirection == .ascending ? .infinity : -.infinity)
+                }, ascending: sortDirection == .ascending)
             }
 
-            displayTotalCount = lakes.count
-            displayLakes = lakes
-
-            // Hero stats (scoped to all lakes, not just filtered)
-            let allLakes = dataService.lakes
-            cachedGoodScoreCount = allLakes.filter { cache[$0.id] != nil && $0.swimScore(weather: cache[$0.id]).total >= 6.0 }.count
-
-            let scored = allLakes.compactMap { lake -> SwimScore? in
-                guard cache[lake.id] != nil else { return nil }
-                return lake.swimScore(weather: cache[lake.id])
-            }
-            if !scored.isEmpty {
-                let avgTotal = scored.map(\.total).reduce(0, +) / Double(scored.count)
-                cachedAverageScore = scored.min { abs($0.total - avgTotal) < abs($1.total - avgTotal) }
-            } else {
-                cachedAverageScore = nil
-            }
-            if let level = cachedAverageScore?.level {
-                if cachedAverageHeroLevel != level || cachedAverageHeroMessage == nil {
-                    cachedAverageHeroMessage = Self.randomizedHeroMessage(for: level)
-                    cachedAverageHeroLevel = level
+            if animated {
+                withAnimation(AppTheme.quickSpring) {
+                    displayTotalCount = lakes.count
+                    displayLakes = lakes
                 }
             } else {
-                cachedAverageHeroLevel = nil
-                cachedAverageHeroMessage = nil
+                displayTotalCount = lakes.count
+                displayLakes = lakes
             }
 
-            // Nearby average: 5 closest lakes → drives home screen Ducky state
-            if let userLocation = locationService.userLocation {
-                let nearbyScored = allLakes
-                    .map { ($0, $0.distance(from: userLocation)) }
-                    .sorted { $0.1 < $1.1 }
-                    .prefix(5)
-                    .compactMap { entry -> SwimScore? in
-                        guard cache[entry.0.id] != nil else { return nil }
-                        return entry.0.swimScore(weather: cache[entry.0.id])
+            if recomputeHeroStats {
+                // Hero stats (scoped to all lakes, not just filtered)
+                let allLakes = dataService.lakes
+
+                let scored = allLakes.compactMap { lake -> SwimScore? in
+                    guard cache[lake.id] != nil else { return nil }
+                    return lake.swimScore(weather: cache[lake.id])
+                }
+                if !scored.isEmpty {
+                    let avgTotal = scored.map(\.total).reduce(0, +) / Double(scored.count)
+                    cachedAverageScore = scored.min { abs($0.total - avgTotal) < abs($1.total - avgTotal) }
+                } else {
+                    cachedAverageScore = nil
+                }
+                if let level = cachedAverageScore?.level {
+                    if cachedAverageHeroLevel != level || cachedAverageHeroMessage == nil {
+                        cachedAverageHeroMessage = Self.randomizedHeroMessage(for: level)
+                        cachedAverageHeroLevel = level
                     }
-                if !nearbyScored.isEmpty {
-                    let avgTotal = nearbyScored.map(\.total).reduce(0, +) / Double(nearbyScored.count)
-                    cachedNearbyAverageScore = nearbyScored.min { abs($0.total - avgTotal) < abs($1.total - avgTotal) }
+                } else {
+                    cachedAverageHeroLevel = nil
+                    cachedAverageHeroMessage = nil
+                }
+
+                // Nearby average: 5 closest lakes → drives home screen Ducky state
+                if let userLocation = locationService.userLocation {
+                    let nearbyScored = allLakes
+                        .map { ($0, $0.distance(from: userLocation)) }
+                        .sorted { $0.1 < $1.1 }
+                        .prefix(5)
+                        .compactMap { entry -> SwimScore? in
+                            guard cache[entry.0.id] != nil else { return nil }
+                            return entry.0.swimScore(weather: cache[entry.0.id])
+                        }
+                    if !nearbyScored.isEmpty {
+                        let avgTotal = nearbyScored.map(\.total).reduce(0, +) / Double(nearbyScored.count)
+                        cachedNearbyAverageScore = nearbyScored.min { abs($0.total - avgTotal) < abs($1.total - avgTotal) }
+                    } else {
+                        cachedNearbyAverageScore = nil
+                    }
                 } else {
                     cachedNearbyAverageScore = nil
                 }
-            } else {
-                cachedNearbyAverageScore = nil
             }
         }
     }
@@ -365,6 +413,21 @@ struct HomeView: View {
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
+            .sheet(item: $quickActionLake) { lake in
+                QuickLakeActionsSheet(
+                    lake: lake,
+                    isFavourite: favourites.contains { $0.lakeID == lake.id },
+                    onShare: { shareLake = lake },
+                    onToggleFavourite: { toggleFavourite(lake) },
+                    onRoute: { openInMaps(lake) }
+                )
+            }
+            .sheet(item: $shareLake) { lake in
+                ShareCardView(
+                    lake: lake,
+                    weather: weatherService.weatherCache[lake.id]
+                )
+            }
         }
         .task {
             await dataService.loadData()
@@ -373,39 +436,49 @@ struct HomeView: View {
             recentLakes = RecentLake.load()
 
             // Populate display immediately after data loads (no debounce)
-            updateDisplayLakes(debounce: false)
+            updateDisplayLakes(debounce: false, animated: false, recomputeHeroStats: true)
             await weatherService.bootstrapWeather(for: dataService.lakes)
-            updateDisplayLakes(debounce: false)
+            updateDisplayLakes(debounce: false, animated: false, recomputeHeroStats: true)
         }
         // React to filter/sort/data changes — reset pagination on most changes
         .onChange(of: dataService.lakes) {
             visibleCount = 20
-            updateDisplayLakes(debounce: false)
+            updateDisplayLakes(debounce: false, animated: false, recomputeHeroStats: true)
             Task {
                 await weatherService.bootstrapWeather(for: dataService.lakes)
-                updateDisplayLakes(debounce: false)
+                updateDisplayLakes(debounce: false, animated: false, recomputeHeroStats: true)
             }
         }
         .onChange(of: sortOption) {
             visibleCount = 20
-            updateDisplayLakes(debounce: false)
+            updateDisplayLakes(debounce: false, animated: true, recomputeHeroStats: false)
         }
         .onChange(of: sortDirection) {
             visibleCount = 20
-            updateDisplayLakes(debounce: false)
+            updateDisplayLakes(debounce: false, animated: true, recomputeHeroStats: false)
         }
         .onChange(of: selectedState) {
             visibleCount = 20
-            updateDisplayLakes(debounce: false)
+            updateDisplayLakes(debounce: false, animated: true, recomputeHeroStats: false)
         }
         .onChange(of: searchText) {
             // Debounce search input so we don't refilter on every keystroke
             visibleCount = 20
-            updateDisplayLakes(debounce: true)
+            updateDisplayLakes(debounce: true, animated: false, recomputeHeroStats: false)
         }
-        // Weather updates are debounced — coalesces many individual lake fetches
+        // Weather updates are debounced; while editing search we defer them for input smoothness.
         .onChange(of: weatherService.cacheRevision) {
-            updateDisplayLakes(debounce: true)
+            guard !isSearchFocused else {
+                pendingWeatherDrivenRefresh = true
+                return
+            }
+            pendingWeatherDrivenRefresh = false
+            updateDisplayLakes(debounce: true, animated: false, recomputeHeroStats: true)
+        }
+        .onChange(of: isSearchFocused) { _, isFocused in
+            guard !isFocused, pendingWeatherDrivenRefresh else { return }
+            pendingWeatherDrivenRefresh = false
+            updateDisplayLakes(debounce: true, animated: false, recomputeHeroStats: true)
         }
         .onAppear {
             guard !sectionsVisible else { return }
@@ -441,7 +514,7 @@ struct HomeView: View {
                     Button {
                         Task {
                             await weatherService.hydrateAllWeather(for: dataService.lakes, forceRefresh: false)
-                            updateDisplayLakes(debounce: false)
+                            updateDisplayLakes(debounce: false, animated: false, recomputeHeroStats: true)
                         }
                     } label: {
                         Text("Erneut versuchen")
@@ -467,60 +540,13 @@ struct HomeView: View {
     // MARK: - Hero Section
 
     private var heroSection: some View {
-        ZStack(alignment: .bottom) {
-            AppTheme.detailHeroGradient(for: heroState.scoreLevel, isDark: false)
-                .frame(height: 310)
-                .clipShape(
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                )
-                .padding(.horizontal, 16)
-                .shadow(color: AppTheme.scoreColor(for: heroState.scoreLevel).opacity(0.28), radius: 20, y: 10)
-
-            VStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(.white.opacity(0.08))
-                        .frame(width: 130, height: 130)
-                        .scaleEffect(heroAppear ? 1.05 : 0.95)
-                    DuckView(state: heroState, size: 110)
-                }
-                .frame(height: 130)
-
-                Text(heroGreeting)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.75))
-
-                Text(LocalizedStringKey(heroMessage))
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .minimumScaleFactor(0.90)
-                    .allowsTightening(true)
-                    .padding(.horizontal, 20)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let error = dataService.error {
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 10))
-                        Text(error)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                    }
-                    .foregroundStyle(.white.opacity(0.65))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.white.opacity(0.12), in: Capsule())
-                }
-            }
-            .padding(.bottom, 36)
-        }
+        HomeHeroCardView(
+            state: heroState,
+            greeting: heroGreeting,
+            message: heroMessage,
+            error: dataService.error
+        )
         .padding(.bottom, 12)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
-                heroAppear = true
-            }
-        }
     }
 
     // MARK: - Content
@@ -547,27 +573,21 @@ struct HomeView: View {
                     .offset(y: sectionsVisible ? 0 : 10)
                     .animation(AppTheme.entranceSpring.delay(0.14), value: sectionsVisible)
             } else {
-                statsRow
-                    .opacity(sectionsVisible ? 1 : 0)
-                    .offset(y: sectionsVisible ? 0 : 10)
-                    .animation(AppTheme.entranceSpring.delay(0.08), value: sectionsVisible)
-
                 if locationService.isAuthorized {
                     nearbyTopScoreSection
                         .opacity(sectionsVisible ? 1 : 0)
                         .offset(y: sectionsVisible ? 0 : 10)
-                        .animation(AppTheme.entranceSpring.delay(0.13), value: sectionsVisible)
+                        .animation(AppTheme.entranceSpring.delay(0.10), value: sectionsVisible)
                 }
 
                 WaveDivider(color: AppTheme.teal, height: 24)
                     .opacity(sectionsVisible ? 1 : 0)
-                    .animation(AppTheme.smoothEase.delay(0.16), value: sectionsVisible)
+                    .animation(AppTheme.smoothEase.delay(0.13), value: sectionsVisible)
 
                 allLakesSection
                     .opacity(sectionsVisible ? 1 : 0)
                     .offset(y: sectionsVisible ? 0 : 10)
-                    .animation(AppTheme.entranceSpring.delay(0.18), value: sectionsVisible)
-                dataAttributionFooter
+                    .animation(AppTheme.entranceSpring.delay(0.16), value: sectionsVisible)
             }
         }
         .padding(.bottom, 40)
@@ -623,7 +643,7 @@ struct HomeView: View {
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(AppTheme.textSecondary)
 
-            TextField("See oder Ort suchen...", text: $searchText)
+            TextField("Gewässer oder Ort suchen...", text: $searchText)
                 .font(.system(size: 16, weight: .regular, design: .rounded))
                 .foregroundStyle(AppTheme.textPrimary)
                 .focused($isSearchFocused)
@@ -649,98 +669,17 @@ struct HomeView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(AppTheme.cardStroke.opacity(0.75), lineWidth: 1)
         )
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                if !isSearchFocused {
+                    isSearchFocused = true
+                }
+            }
+        )
         .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
         .shadow(color: AppTheme.glowOverlay.opacity(0.08), radius: 2, y: 1)
         .padding(.horizontal, 20)
-    }
-
-    // MARK: - Data Attribution
-
-    private var dataAttributionFooter: some View {
-        VStack(spacing: 6) {
-            Divider()
-                .padding(.horizontal, 20)
-
-            VStack(spacing: 4) {
-                HStack(spacing: 4) {
-                    Image(systemName: "building.columns")
-                        .font(.system(size: 10))
-                    Text("Wasserqualität & Temperatur: AGES Badegewässerdatenbank")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                }
-
-                Text("Wassertemperaturen werden von Juni bis August gemessen.")
-                    .font(.system(size: 11, weight: .regular, design: .rounded))
-
-                HStack(spacing: 4) {
-                    Image(systemName: "cloud.sun")
-                        .font(.system(size: 10))
-                    Text("Wetter: Open-Meteo (aktuell)")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                }
-            }
-            .foregroundStyle(AppTheme.textSecondary.opacity(0.7))
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-        }
-    }
-
-    // MARK: - Stats Row
-
-    private var statsRow: some View {
-        HStack(spacing: 12) {
-            statChip(
-                icon: "drop.fill",
-                value: "\(dataService.lakes.count)",
-                label: "Gewässer",
-                color: AppTheme.oceanBlue
-            )
-            .opacity(sectionsVisible ? 1 : 0)
-            .scaleEffect(sectionsVisible ? 1 : 0.92)
-            .offset(y: sectionsVisible ? 0 : 8)
-            .animation(AppTheme.entranceSpring.delay(0.08), value: sectionsVisible)
-
-            statChip(
-                icon: "star.fill",
-                value: "\(cachedGoodScoreCount)",
-                label: "Guter Score",
-                color: AppTheme.scoreGut
-            )
-            .opacity(sectionsVisible ? 1 : 0)
-            .scaleEffect(sectionsVisible ? 1 : 0.92)
-            .offset(y: sectionsVisible ? 0 : 8)
-            .animation(AppTheme.entranceSpring.delay(0.12), value: sectionsVisible)
-
-            statChip(
-                icon: "checkmark.seal.fill",
-                value: "\(dataService.lakes.filter { $0.qualityRating?.uppercased() == "A" }.count)",
-                label: "Top Qualität",
-                color: AppTheme.freshGreen
-            )
-            .opacity(sectionsVisible ? 1 : 0)
-            .scaleEffect(sectionsVisible ? 1 : 0.92)
-            .offset(y: sectionsVisible ? 0 : 8)
-            .animation(AppTheme.entranceSpring.delay(0.16), value: sectionsVisible)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 20)
-    }
-
-    private func statChip(icon: String, value: String, label: String, color: Color) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 18))
-                .foregroundStyle(color)
-            Text(value)
-                .font(.system(size: 18, weight: .heavy, design: .rounded))
-                .foregroundStyle(AppTheme.textPrimary)
-            Text(label)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(AppTheme.textSecondary)
-        }
-        .frame(width: 90, height: 90)
-        .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var nearbyTopScoreSection: some View {
@@ -781,10 +720,17 @@ struct HomeView: View {
                                 SwimScoreBadge(score: pick.score, size: .medium)
 
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(pick.lake.displayName)
-                                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                                        .foregroundStyle(AppTheme.textPrimary)
-                                        .lineLimit(1)
+                                    HStack(spacing: 6) {
+                                        Text(pick.lake.displayName)
+                                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                                            .foregroundStyle(AppTheme.textPrimary)
+                                            .lineLimit(1)
+                                        if favourites.contains(where: { $0.lakeID == pick.lake.id }) {
+                                            Image(systemName: "heart.fill")
+                                                .font(.system(size: 10))
+                                                .foregroundStyle(AppTheme.warmPink)
+                                        }
+                                    }
 
                                     HStack(spacing: 4) {
                                         if let municipality = pick.lake.municipality {
@@ -809,7 +755,7 @@ struct HomeView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { lakeContextMenu(pick.lake) }
+                        .highPriorityGesture(quickActionGesture(for: pick.lake))
 
                         if index < topNearbyPicks.count - 1 {
                             Divider()
@@ -832,7 +778,7 @@ struct HomeView: View {
 
         return VStack(alignment: .leading, spacing: 14) {
             if !isSearchActive {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(AppTheme.teal)
@@ -840,18 +786,17 @@ struct HomeView: View {
                         .font(AppTheme.sectionTitle)
                         .foregroundStyle(AppTheme.textPrimary)
                         .lineLimit(1)
+                        .layoutPriority(1)
                     Spacer()
 
                     Menu {
                         ForEach(SortOption.displayOrder, id: \.rawValue) { option in
                             Button {
-                                withAnimation(AppTheme.quickSpring) {
-                                    if sortOption == option {
-                                        sortDirection.toggle()
-                                    } else {
-                                        sortOption = option
-                                        sortDirection = option.defaultDirection
-                                    }
+                                if sortOption == option {
+                                    sortDirection.toggle()
+                                } else {
+                                    sortOption = option
+                                    sortDirection = option.defaultDirection
                                 }
                                 Haptics.light()
                             } label: {
@@ -866,37 +811,42 @@ struct HomeView: View {
                             .disabled(option == .nearest && locationService.userLocation == nil)
                         }
                     } label: {
-                        ViewThatFits {
-                            HStack(spacing: 4) {
+                        HStack(spacing: 4) {
+                            if sortOption != .alphabetical {
                                 Image(systemName: sortOption.icon)
-                                    .font(.system(size: 11, weight: .semibold))
-                                Text(sortOption.label)
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                    .lineLimit(1)
-                                Image(systemName: sortDirection.symbol)
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(.system(size: 10, weight: .semibold))
                             }
-                            .foregroundStyle(AppTheme.oceanBlue)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(AppTheme.oceanBlue.opacity(0.1), in: Capsule())
-
-                            HStack(spacing: 2) {
-                                Image(systemName: sortOption.icon)
-                                    .font(.system(size: 11, weight: .bold))
-                                Image(systemName: sortDirection.symbol)
-                                    .font(.system(size: 9, weight: .bold))
-                            }
-                            .foregroundStyle(AppTheme.oceanBlue)
-                            .frame(width: 34, height: 28)
-                            .background(AppTheme.oceanBlue.opacity(0.1), in: Capsule())
+                            Text(currentSortPillLabel)
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.9)
+                                .allowsTightening(true)
                         }
+                        .foregroundStyle(AppTheme.oceanBlue)
+                        .frame(minWidth: 76)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(AppTheme.oceanBlue.opacity(0.1), in: Capsule())
                     }
 
+                    Button {
+                        Haptics.light()
+                        withAnimation(AppTheme.quickSpring) {
+                            sortDirection.toggle()
+                        }
+                    } label: {
+                        Image(systemName: sortDirection.symbol)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(AppTheme.oceanBlue)
+                            .frame(width: 28, height: 26)
+                            .background(AppTheme.oceanBlue.opacity(0.1), in: Capsule())
+                    }
+                    .buttonStyle(PressableChipButtonStyle())
+
                     Text("\(displayTotalCount)")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(AppTheme.divider, in: Capsule())
                 }
@@ -905,11 +855,11 @@ struct HomeView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         filterChip(label: "Alle", isSelected: selectedState == nil) {
-                            selectedState = nil
+                            withAnimation(AppTheme.quickSpring) { selectedState = nil }
                         }
                         ForEach(dataService.availableStates, id: \.self) { state in
                             filterChip(label: state, isSelected: selectedState == state) {
-                                selectedState = selectedState == state ? nil : state
+                                withAnimation(AppTheme.quickSpring) { selectedState = selectedState == state ? nil : state }
                             }
                         }
                     }
@@ -925,9 +875,11 @@ struct HomeView: View {
                             distanceKm: locationService.userLocation.map { lake.distance(from: $0) },
                             isFavourite: favourites.contains { $0.lakeID == lake.id }
                         )
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.plain)
-                    .contextMenu { lakeContextMenu(lake) }
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(quickActionGesture(for: lake))
 
                     // Use materialized array — O(1), no re-evaluation of displayLakes
                     if lake.id != visibleLakes.last?.id {
@@ -998,6 +950,7 @@ struct HomeView: View {
                     .stroke(isSelected ? Color.clear : AppTheme.divider, lineWidth: 1.5)
             )
         }
+        .buttonStyle(PressableChipButtonStyle())
         .animation(AppTheme.quickSpring, value: isSelected)
     }
 
@@ -1038,42 +991,14 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Context Menu
+    // MARK: - Quick Actions
 
-    @ViewBuilder
-    private func lakeContextMenu(_ lake: BathingWater) -> some View {
-        let isFav = favourites.contains { $0.lakeID == lake.id }
-
-        ShareLink(item: shareText(for: lake)) {
-            Label("Teilen", systemImage: "square.and.arrow.up")
-        }
-
-        Button {
-            Haptics.medium()
-            toggleFavourite(lake)
-        } label: {
-            Label(isFav ? "Favorit entfernen" : "Zu Favoriten", systemImage: isFav ? "heart.slash.fill" : "heart")
-        }
-
-        Button {
-            openInMaps(lake)
-        } label: {
-            Label("Route", systemImage: "map.fill")
-        }
-    }
-
-    private func shareText(for lake: BathingWater) -> String {
-        let score = lake.swimScore(weather: weatherService.weatherCache[lake.id])
-        var text = "\(lake.displayName) – Swim Score: \(String(format: "%.1f", score.total))/10 (\(score.level.label))"
-        if let temp = lake.currentWaterTemperature {
-            text += " – \(String(format: "%.1f°C", temp)) Wasser"
-        }
-        text += " – \(lake.qualityLabel)"
-        if let municipality = lake.municipality {
-            text += " (\(municipality))"
-        }
-        text += "\n🦆 via Flüsse & Seen"
-        return text
+    private func quickActionGesture(for lake: BathingWater) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.22)
+            .onEnded { _ in
+                Haptics.medium()
+                quickActionLake = lake
+            }
     }
 
     private func toggleFavourite(_ lake: BathingWater) {
@@ -1102,6 +1027,427 @@ struct HomeView: View {
     }
 }
 
+private struct PressableChipButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.72), value: configuration.isPressed)
+    }
+}
+
+private struct QuickLakeActionsSheet: View {
+    let lake: BathingWater
+    let isFavourite: Bool
+    let onShare: () -> Void
+    let onToggleFavourite: () -> Void
+    let onRoute: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: "duck.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.sunshine)
+                Text(lake.displayName)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(2)
+                Spacer()
+            }
+
+            Button {
+                Haptics.light()
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                    onShare()
+                }
+            } label: {
+                actionRow(
+                    title: "Teilen",
+                    subtitle: "Gewässer teilen.",
+                    icon: "square.and.arrow.up",
+                    tint: AppTheme.oceanBlue
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                Haptics.medium()
+                onToggleFavourite()
+                dismiss()
+            } label: {
+                actionRow(
+                    title: isFavourite ? "Favorit entfernen" : "Favorit",
+                    subtitle: isFavourite ? "Aus Favoriten löschen." : "Als Favorit speichern.",
+                    icon: isFavourite ? "heart.slash.fill" : "heart.fill",
+                    tint: AppTheme.warmPink
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                Haptics.medium()
+                onRoute()
+                dismiss()
+            } label: {
+                actionRow(
+                    title: "Route",
+                    subtitle: "In Apple Maps öffnen.",
+                    icon: "map.fill",
+                    tint: AppTheme.teal
+                )
+            }
+            .buttonStyle(.plain)
+
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .presentationDetents([.height(270)])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(26)
+    }
+
+    private func actionRow(title: String, subtitle: String, icon: String, tint: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text(subtitle)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(AppTheme.divider, lineWidth: 1)
+        )
+    }
+}
+
+private struct HomeHeroMotionConfig {
+    let bubbleCount: Int
+    let bubbleColor: Color
+    let waveColor: Color
+    let waveHeight: CGFloat
+    let waveSpeed: Double
+    let waveOpacity: Double
+    let symbolNames: [String]
+    let symbolColor: Color
+    let symbolOpacity: Double
+    let symbolCount: Int
+    let symbolDrift: CGFloat
+    let symbolAmplitude: CGFloat
+
+    init(level: SwimScore.Level) {
+        switch level {
+        case .perfekt:
+            bubbleCount = 15
+            bubbleColor = .white.opacity(0.32)
+            waveColor = AppTheme.scoreColor(for: .perfekt)
+            waveHeight = 78
+            waveSpeed = 1.35
+            waveOpacity = 0.92
+            symbolNames = ["sparkles", "sun.max.fill", "drop.fill"]
+            symbolColor = AppTheme.sunshine
+            symbolOpacity = 0.85
+            symbolCount = 7
+            symbolDrift = 8
+            symbolAmplitude = 10
+        case .gut:
+            bubbleCount = 12
+            bubbleColor = .white.opacity(0.28)
+            waveColor = AppTheme.scoreColor(for: .gut)
+            waveHeight = 70
+            waveSpeed = 1.12
+            waveOpacity = 0.86
+            symbolNames = ["sparkles", "water.waves", "drop.fill"]
+            symbolColor = AppTheme.teal
+            symbolOpacity = 0.78
+            symbolCount = 6
+            symbolDrift = 6
+            symbolAmplitude = 8
+        case .mittel:
+            bubbleCount = 10
+            bubbleColor = .white.opacity(0.24)
+            waveColor = AppTheme.scoreColor(for: .mittel)
+            waveHeight = 62
+            waveSpeed = 0.95
+            waveOpacity = 0.78
+            symbolNames = ["questionmark.circle.fill", "wind", "drop.fill"]
+            symbolColor = AppTheme.sunshine
+            symbolOpacity = 0.68
+            symbolCount = 5
+            symbolDrift = 5
+            symbolAmplitude = 7
+        case .schlecht:
+            bubbleCount = 8
+            bubbleColor = .white.opacity(0.20)
+            waveColor = AppTheme.scoreColor(for: .schlecht)
+            waveHeight = 58
+            waveSpeed = 0.84
+            waveOpacity = 0.72
+            symbolNames = ["wind", "snowflake", "thermometer.low"]
+            symbolColor = AppTheme.skyBlue
+            symbolOpacity = 0.70
+            symbolCount = 5
+            symbolDrift = 5
+            symbolAmplitude = 8
+        case .warnung:
+            bubbleCount = 7
+            bubbleColor = .white.opacity(0.18)
+            waveColor = AppTheme.scoreColor(for: .warnung)
+            waveHeight = 56
+            waveSpeed = 0.76
+            waveOpacity = 0.68
+            symbolNames = ["exclamationmark.triangle.fill", "xmark.octagon.fill", "hand.raised.fill"]
+            symbolColor = AppTheme.coral
+            symbolOpacity = 0.90
+            symbolCount = 6
+            symbolDrift = 7
+            symbolAmplitude = 10
+        }
+    }
+}
+
+private struct HomeHeroCardView: View {
+    let state: DuckState
+    let greeting: String
+    let message: String
+    var error: String? = nil
+
+    @State private var heroAppear = false
+
+    private var heroBaseColor: Color {
+        AppTheme.scoreColor(for: state.scoreLevel)
+    }
+
+    private var heroAccentColor: Color {
+        switch state.scoreLevel {
+        case .perfekt: return AppTheme.sunshine
+        case .gut: return AppTheme.skyBlue
+        case .mittel: return AppTheme.sunshine
+        case .schlecht: return AppTheme.lightBlue
+        case .warnung: return AppTheme.sunshine.opacity(0.85)
+        }
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            ZStack(alignment: .bottom) {
+                AppTheme.detailHeroGradient(for: state.scoreLevel, isDark: false)
+
+                HomeHeroMotionLayer(level: state.scoreLevel)
+
+                LinearGradient(
+                    colors: [
+                        .white.opacity(0.20),
+                        heroAccentColor.opacity(0.14),
+                        heroBaseColor.opacity(0.20)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottom
+                )
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+            .frame(height: 310)
+            .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 32, style: .continuous)
+                    .stroke(.white.opacity(0.14), lineWidth: 1)
+                    .allowsHitTesting(false)
+            )
+            .padding(.horizontal, 16)
+            .shadow(color: AppTheme.scoreColor(for: state.scoreLevel).opacity(0.28), radius: 20, y: 10)
+
+            VStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(.white.opacity(0.08))
+                        .frame(width: 130, height: 130)
+                        .scaleEffect(heroAppear ? 1.05 : 0.95)
+                    DuckView(state: state, size: 110)
+                }
+                .frame(height: 130)
+
+                Text(greeting)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        LinearGradient(
+                            colors: [heroAccentColor.opacity(0.34), heroBaseColor.opacity(0.34)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: Capsule()
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(.white.opacity(0.34), lineWidth: 1)
+                    )
+                    .shadow(color: heroBaseColor.opacity(0.28), radius: 4, y: 2)
+
+                Text(LocalizedStringKey(message))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .minimumScaleFactor(0.90)
+                    .allowsTightening(true)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        heroBaseColor.opacity(0.40),
+                                        heroAccentColor.opacity(0.26),
+                                        .white.opacity(0.18)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(.white.opacity(0.32), lineWidth: 1)
+                    )
+                    .shadow(color: heroBaseColor.opacity(0.34), radius: 7, y: 3)
+                    .shadow(color: .black.opacity(0.10), radius: 1, y: 1)
+                    .padding(.horizontal, 26)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let error {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                        Text(error)
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                    }
+                    .foregroundStyle(.white.opacity(0.65))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.white.opacity(0.12), in: Capsule())
+                }
+            }
+            .padding(.bottom, 36)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
+                heroAppear = true
+            }
+        }
+    }
+}
+
+private struct HomeHeroMotionLayer: View {
+    let level: SwimScore.Level
+
+    private var config: HomeHeroMotionConfig { .init(level: level) }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            FloatingBubblesView(count: config.bubbleCount, color: config.bubbleColor)
+                .padding(.top, 8)
+
+            HomeHeroFloatingSymbolsView(config: config)
+                .padding(.vertical, 12)
+
+            WaterWaveView(baseColor: config.waveColor, height: config.waveHeight, speed: config.waveSpeed)
+                .frame(height: 104)
+                .opacity(config.waveOpacity)
+                .offset(y: 16)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct HomeHeroFloatingSymbolsView: View {
+    let config: HomeHeroMotionConfig
+
+    var body: some View {
+        GeometryReader { proxy in
+            TimelineView(.animation) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                ZStack {
+                    ForEach(0..<config.symbolCount, id: \.self) { index in
+                        let frame = symbolFrame(index: index, time: t, in: proxy.size)
+                        Image(systemName: config.symbolNames[index % config.symbolNames.count])
+                            .font(.system(size: frame.size, weight: .semibold, design: .rounded))
+                            .foregroundStyle(config.symbolColor.opacity(config.symbolOpacity))
+                            .shadow(color: .black.opacity(0.16), radius: 2, y: 1)
+                            .position(x: frame.x, y: frame.y)
+                    }
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func symbolFrame(index: Int, time: TimeInterval, in size: CGSize) -> (x: CGFloat, y: CGFloat, size: CGFloat) {
+        let indexValue = Double(index + 1)
+        let phase = time * (0.58 + (indexValue * 0.03)) + indexValue * 1.77
+        let xUnit = normalized(index: index, salt: 1.11)
+        let yUnit = normalized(index: index, salt: 2.73)
+        let sizeUnit = normalized(index: index, salt: 5.49)
+
+        let baseX = size.width * (0.12 + 0.76 * xUnit)
+        let baseY = size.height * (0.18 + 0.58 * yUnit)
+        let driftX = CGFloat(cos(phase)) * config.symbolDrift
+        let driftY = CGFloat(sin(phase * 1.3)) * config.symbolAmplitude
+        let symbolSize = 10 + (10 * sizeUnit)
+
+        return (x: baseX + driftX, y: baseY + driftY, size: symbolSize)
+    }
+
+    private func normalized(index: Int, salt: Double) -> CGFloat {
+        let value = sin(Double(index) * 12.9898 + salt * 78.233) * 43758.5453
+        return CGFloat(value - floor(value))
+    }
+}
+
+private struct HomeHeroCardPreviewContainer: View {
+    let state: DuckState
+    let greeting: String
+    let message: String
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            AppTheme.pageGradient
+                .ignoresSafeArea()
+
+            HomeHeroCardView(
+                state: state,
+                greeting: greeting,
+                message: message
+            )
+            .padding(.top, 8)
+        }
+    }
+}
+
 #Preview {
     HomeView()
         .environment(DataService.shared)
@@ -1110,11 +1456,42 @@ struct HomeView: View {
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }
 
-#Preview("Dark Mode") {
-    HomeView()
-        .environment(DataService.shared)
-        .environment(LocationService.shared)
-        .environment(WeatherService.shared)
-        .modelContainer(for: FavouriteItem.self, inMemory: true)
-        .preferredColorScheme(.dark)
+#Preview("Hero Perfekt") {
+    HomeHeroCardPreviewContainer(
+        state: .begeistert,
+        greeting: "Grias di!",
+        message: "Oida, heit is Badetag vom Feinsten. REIN DA!"
+    )
+}
+
+#Preview("Hero Gut") {
+    HomeHeroCardPreviewContainer(
+        state: .zufrieden,
+        greeting: "Grias di!",
+        message: "Passt scho richtig guad. *Ducky gibt den offiziellen Nicker*"
+    )
+}
+
+#Preview("Hero Mittel") {
+    HomeHeroCardPreviewContainer(
+        state: .zoegernd,
+        greeting: "Servas! I hob Flossn-Jucken.",
+        message: "I bin a bissi skeptisch, oba ned komplett dagegen."
+    )
+}
+
+#Preview("Hero Schlecht") {
+    HomeHeroCardPreviewContainer(
+        state: .frierend,
+        greeting: "Guadn Abend!",
+        message: "I glaub i bleib heit lieber im Hoodie und ess a fettes Brot."
+    )
+}
+
+#Preview("Hero Warnung") {
+    HomeHeroCardPreviewContainer(
+        state: .warnend,
+        greeting: "Heast, immer no munter?",
+        message: "Na heit fix ned. I zieh die Notbremse."
+    )
 }

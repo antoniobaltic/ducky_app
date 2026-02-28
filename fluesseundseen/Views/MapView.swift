@@ -3,18 +3,19 @@ import SwiftData
 import MapKit
 
 struct MapView: View {
+    private static let defaultRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 47.5, longitude: 14.0),
+        span: MKCoordinateSpan(latitudeDelta: 4.5, longitudeDelta: 5.0)
+    )
+
     @Environment(DataService.self) private var dataService
     @Environment(LocationService.self) private var locationService
     @Environment(WeatherService.self) private var weatherService
     @State private var selectedLake: BathingWater?
     @State private var selectedWeather: LakeWeather?
-    @State private var visibleRegion: MKCoordinateRegion?
-    @State private var cameraPosition: MapCameraPosition = .region(
-        MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 47.5, longitude: 14.0),
-            span: MKCoordinateSpan(latitudeDelta: 4.5, longitudeDelta: 5.0)
-        )
-    )
+    @State private var visibleRegion: MKCoordinateRegion? = defaultRegion
+    @State private var cameraPosition: MapCameraPosition = .region(defaultRegion)
+    @State private var didSetInitialCamera = false
 
     init(initialSelectedLake: BathingWater? = nil) {
         _selectedLake = State(initialValue: initialSelectedLake)
@@ -74,6 +75,7 @@ struct MapView: View {
             .navigationTitle("Karte")
             .task {
                 await dataService.loadData()
+                applyInitialCameraIfNeeded()
                 if let lake = selectedLake {
                     selectedWeather = await weatherService.fetchWeather(for: lake)
                 }
@@ -92,6 +94,9 @@ struct MapView: View {
                 }
                 Task { selectedWeather = await weatherService.fetchWeather(for: lake) }
             }
+        }
+        .onChange(of: locationService.userLocation) { _, _ in
+            applyInitialCameraIfNeeded()
         }
     }
 
@@ -154,16 +159,15 @@ struct MapView: View {
                     miniInfoChip(
                         icon: "wind",
                         value: String(format: "%.0f°C", airTemp),
-                        color: AppTheme.airTempGreen,
-                        textColor: AppTheme.airTempGreen
+                        color: AppTheme.airTempGreen
                     )
                 } else {
-                    miniInfoChip(icon: "wind", value: "Luft –", color: AppTheme.textSecondary)
+                    miniInfoChip(icon: "wind", value: "-", color: AppTheme.airTempGreen)
                 }
                 if let waterTemp = lake.currentWaterTemperature {
-                    miniInfoChip(icon: "drop.fill", value: String(format: "%.0f°C", waterTemp), color: AppTheme.skyBlue)
+                    miniInfoChip(icon: "drop.fill", value: String(format: "%.0f°C", waterTemp), color: AppTheme.oceanBlue)
                 } else {
-                    miniInfoChip(icon: "drop.fill", value: "Wasser –", color: AppTheme.textSecondary)
+                    miniInfoChip(icon: "drop.fill", value: "-", color: AppTheme.oceanBlue)
                 }
                 if let distanceKm = distanceToLake(lake) {
                     miniInfoChip(icon: "location.fill", value: String(format: "%.1f km", distanceKm), color: AppTheme.teal)
@@ -240,6 +244,33 @@ struct MapView: View {
         #else
         NSWorkspace.shared.open(url)
         #endif
+    }
+
+    private func applyInitialCameraIfNeeded() {
+        guard !didSetInitialCamera else { return }
+
+        if let lake = selectedLake {
+            let region = MKCoordinateRegion(
+                center: lake.coordinate,
+                span: MKCoordinateSpan(latitudeDelta: 0.3, longitudeDelta: 0.3)
+            )
+            visibleRegion = region
+            cameraPosition = .region(region)
+            didSetInitialCamera = true
+            return
+        }
+
+        guard let userLocation = locationService.userLocation else { return }
+
+        // 50 km radius => 100 km span.
+        let region = MKCoordinateRegion(
+            center: userLocation.coordinate,
+            latitudinalMeters: 100_000,
+            longitudinalMeters: 100_000
+        )
+        visibleRegion = region
+        cameraPosition = .region(region)
+        didSetInitialCamera = true
     }
 }
 

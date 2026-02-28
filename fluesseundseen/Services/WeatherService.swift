@@ -56,6 +56,7 @@ final class WeatherService {
     var hydrationCompleted = 0
     var isHydratingAll = false
     var isUsingStaleCache = false
+    var lastCacheUpdate: Date? { cacheTimestamp }
 
     static let shared = WeatherService()
     private let cacheTTL: TimeInterval = 30 * 60 // 30 minutes
@@ -168,6 +169,24 @@ final class WeatherService {
     /// Results are written to cache in a single batch after all fetches complete.
     func prefetchWeather(for lakes: [BathingWater]) async {
         await runHydration(for: uniqueLakes(lakes), forceRefresh: false, showProgress: false)
+    }
+
+    func clearCache() {
+        saveCacheTask?.cancel()
+        saveCacheTask = nil
+        hydrationTask?.cancel()
+        hydrationTask = nil
+        inFlightFetches.removeAll()
+
+        weatherCache.removeAll()
+        cacheTimestamp = nil
+        hydrationTotal = 0
+        hydrationCompleted = 0
+        isHydratingAll = false
+        isUsingStaleCache = false
+        cacheRevision &+= 1
+
+        try? FileManager.default.removeItem(at: Self.cacheFileURL)
     }
 
     private func runHydration(

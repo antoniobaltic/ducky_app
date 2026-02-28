@@ -9,8 +9,12 @@ struct ContentView: View {
     private let lakePlaceService = LakePlaceService.shared
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
-    @State private var selectedTab = 0
+    @State private var selectedTab: Int
+
+    init() {
+        let stored = UserDefaults.standard.object(forKey: "preferredStartTab") as? Int ?? 0
+        _selectedTab = State(initialValue: Self.clampedTab(stored))
+    }
 
     var body: some View {
         ZStack {
@@ -28,7 +32,7 @@ struct ContentView: View {
         .environment(weatherService)
         .environment(lakeContentService)
         .environment(lakePlaceService)
-        .preferredColorScheme(appearanceMode.colorScheme)
+        .preferredColorScheme(.light)
     }
 
     private var mainTabView: some View {
@@ -52,6 +56,10 @@ struct ContentView: View {
                 .tag(2)
         }
         .tint(AppTheme.oceanBlue)
+    }
+
+    private static func clampedTab(_ value: Int) -> Int {
+        min(max(value, 0), 2)
     }
 }
 

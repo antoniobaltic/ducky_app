@@ -10,6 +10,11 @@ final class DataService {
     var isLoading = false
     var error: String?
     var lastFetch: Date?
+    var cacheTimestamp: Date?
+
+    var lastUpdated: Date? {
+        [lastFetch, cacheTimestamp].compactMap { $0 }.max()
+    }
 
     /// Cached result of availableStates — invalidated whenever `lakes` changes.
     @ObservationIgnored
@@ -32,13 +37,19 @@ final class DataService {
         // Clean up legacy UserDefaults cache entries to free space
         UserDefaults.standard.removeObject(forKey: "cached_badegewaesser")
         UserDefaults.standard.removeObject(forKey: "cached_badegewaesser_timestamp")
+        cacheTimestamp = Self.readCacheTimestamp()
     }
 
     // MARK: - Public
 
     func loadData() async {
         if let cached = await loadFromCache() {
-            await MainActor.run { lakes = cached }
+            await MainActor.run {
+                lakes = cached
+                if lastFetch == nil {
+                    lastFetch = cacheTimestamp
+                }
+            }
             return
         }
         await fetchFromNetwork()
@@ -46,6 +57,13 @@ final class DataService {
 
     func refresh() async {
         await fetchFromNetwork()
+    }
+
+    func clearCache() {
+        try? FileManager.default.removeItem(at: Self.cacheDataURL)
+        try? FileManager.default.removeItem(at: Self.cacheTimestampURL)
+        cacheTimestamp = nil
+        lastFetch = nil
     }
 
     // MARK: - Network
@@ -63,6 +81,7 @@ final class DataService {
             await MainActor.run {
                 lakes = parsed
                 lastFetch = Date()
+                cacheTimestamp = lastFetch
                 isLoading = false
             }
             await saveToCacheAsync(data: data)
@@ -138,7 +157,8 @@ final class DataService {
     private func saveToCacheAsync(data: Data) async {
         let dataURL = Self.cacheDataURL
         let tsURL = Self.cacheTimestampURL
-        let timestamp = "\(Date().timeIntervalSinceReferenceDate)"
+        let now = Date()
+        let timestamp = "\(now.timeIntervalSinceReferenceDate)"
         await Task.detached(priority: .background) {
             try? data.write(to: dataURL, options: .atomic)
             try? timestamp.data(using: .utf8)?.write(to: tsURL, options: .atomic)
@@ -151,8 +171,13 @@ final class DataService {
                   let tsStr = String(data: tsData, encoding: .utf8),
                   let timestamp = Double(tsStr)
             else { return nil }
+            let cacheDate = Date(timeIntervalSinceReferenceDate: timestamp)
+            await MainActor.run { cacheTimestamp = cacheDate }
             let age = Date().timeIntervalSinceReferenceDate - timestamp
             guard age < cacheExpirySeconds else { return nil }
+        } else {
+            let cacheDate = Self.readCacheTimestamp()
+            await MainActor.run { cacheTimestamp = cacheDate }
         }
 
         let dataURL = Self.cacheDataURL
@@ -172,6 +197,14 @@ final class DataService {
     private static var cacheTimestampURL: URL {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         return dir.appendingPathComponent("badegewaesser_cache_ts.txt")
+    }
+
+    private static func readCacheTimestamp() -> Date? {
+        guard let tsData = try? Data(contentsOf: cacheTimestampURL),
+              let tsStr = String(data: tsData, encoding: .utf8),
+              let timestamp = Double(tsStr)
+        else { return nil }
+        return Date(timeIntervalSinceReferenceDate: timestamp)
     }
 
     enum DataError: Error {
