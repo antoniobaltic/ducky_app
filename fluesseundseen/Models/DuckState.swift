@@ -46,15 +46,22 @@ enum DuckState: String, Equatable, CaseIterable {
     }
 
     var backgroundGradient: LinearGradient {
-        let colors: [Color]
+        let base = AppTheme.scoreColor(for: scoreLevel)
+        return LinearGradient(
+            colors: [base.opacity(0.22), base.opacity(0.11)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    var scoreLevel: SwimScore.Level {
         switch self {
-        case .begeistert: colors = [Color(red: 0.93, green: 0.98, blue: 1.00), Color(red: 0.72, green: 0.91, blue: 1.00)]
-        case .zufrieden:  colors = [Color(red: 0.92, green: 0.98, blue: 0.95), Color(red: 0.68, green: 0.90, blue: 0.88)]
-        case .zoegernd:   colors = [Color(red: 0.97, green: 0.96, blue: 0.88), Color(red: 0.82, green: 0.88, blue: 0.75)]
-        case .frierend:   colors = [Color(red: 0.88, green: 0.93, blue: 1.00), Color(red: 0.62, green: 0.78, blue: 0.97)]
-        case .warnend:    colors = [Color(red: 1.00, green: 0.93, blue: 0.88), Color(red: 0.97, green: 0.78, blue: 0.70)]
+        case .begeistert: return .perfekt
+        case .zufrieden:  return .gut
+        case .zoegernd:   return .mittel
+        case .frierend:   return .schlecht
+        case .warnend:    return .warnung
         }
-        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
     var accentColor: Color {
