@@ -78,9 +78,11 @@ final class WeatherService {
     }
 
     private init() {
-        // Clean up legacy UserDefaults cache entries
+        // Clean up legacy cache entries
         UserDefaults.standard.removeObject(forKey: "weatherCache_v2")
         UserDefaults.standard.removeObject(forKey: "weatherCache_v2_timestamp")
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        try? FileManager.default.removeItem(at: caches.appendingPathComponent("weather_cache_v3.json"))
         loadDiskCache()
     }
 
@@ -402,7 +404,7 @@ final class WeatherService {
 
     private static var cacheFileURL: URL {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        return dir.appendingPathComponent("weather_cache_v3.json")
+        return dir.appendingPathComponent("weather_cache_v4.json")
     }
 
     // MARK: - WMO Weather Code Mapping (static for nonisolated access)
