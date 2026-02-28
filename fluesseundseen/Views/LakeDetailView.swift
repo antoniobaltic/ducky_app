@@ -116,12 +116,21 @@ struct LakeDetailView: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .iOSTopBarTrailing) {
-                HStack(spacing: 12) {
+                HStack(spacing: 4) {
                     Button { showShareCard = true } label: {
                         Image(systemName: "square.and.arrow.up")
                             .font(.system(size: 16, weight: .semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
                     }
-                    favouriteButton
+                    Button { toggleFavourite() } label: {
+                        Image(systemName: isFavourite ? "heart.fill" : "heart")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(isFavourite ? AppTheme.warmPink : .primary)
+                            .symbolEffect(.bounce, value: isFavourite)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
+                    }
                 }
             }
         }
