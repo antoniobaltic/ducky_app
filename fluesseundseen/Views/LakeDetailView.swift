@@ -379,13 +379,14 @@ struct LakeDetailView: View {
                 Spacer()
             }
 
-            HStack(spacing: 8) {
+            // Flow layout: chips wrap to a new row automatically when the
+            // weather condition text is long (e.g. "Überwiegend bewölkt").
+            ChipFlowLayout(spacing: 8) {
                 if let weather {
-                    let weatherStyle = weatherConditionChipStyle(for: weather)
                     quickConditionChip(
                         icon: weather.conditionSymbol,
                         value: weather.conditionDescription,
-                        color: weatherStyle
+                        color: weatherConditionChipStyle(for: weather)
                     )
                 }
                 if let weather, let airTemp = weather.airTemperature {
@@ -408,9 +409,6 @@ struct LakeDetailView: View {
                         color: AppTheme.oceanBlue
                     )
                 }
-            }
-
-            HStack(spacing: 8) {
                 if let distance = locationService.userLocation.map({ lake.distance(from: $0) }) {
                     quickConditionChip(
                         icon: "location.fill",
@@ -447,6 +445,58 @@ struct LakeDetailView: View {
             return AppTheme.coral
         default:
             return AppTheme.textSecondary
+        }
+    }
+
+    // MARK: - Chip Flow Layout
+
+    /// A Layout that arranges chips left-to-right and wraps to the next row
+    /// when the available width is exhausted — like CSS `flex-wrap: wrap`.
+    struct ChipFlowLayout: Layout {
+        var spacing: CGFloat = 8
+
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            let result = flow(in: proposal.replacingUnspecifiedDimensions().width, subviews: subviews)
+            return result.size
+        }
+
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            let result = flow(in: bounds.width, subviews: subviews)
+            for (index, frame) in result.frames.enumerated() {
+                subviews[index].place(
+                    at: CGPoint(x: frame.minX + bounds.minX, y: frame.minY + bounds.minY),
+                    proposal: ProposedViewSize(frame.size)
+                )
+            }
+        }
+
+        private struct FlowResult {
+            var size: CGSize = .zero
+            var frames: [CGRect] = []
+        }
+
+        private func flow(in maxWidth: CGFloat, subviews: Subviews) -> FlowResult {
+            var result = FlowResult()
+            var x: CGFloat = 0
+            var y: CGFloat = 0
+            var rowHeight: CGFloat = 0
+            var rowMaxX: CGFloat = 0
+
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+                if x + size.width > maxWidth, x > 0 {
+                    y += rowHeight + spacing
+                    x = 0
+                    rowHeight = 0
+                }
+                result.frames.append(CGRect(origin: CGPoint(x: x, y: y), size: size))
+                rowHeight = max(rowHeight, size.height)
+                x += size.width + spacing
+                rowMaxX = max(rowMaxX, x - spacing)
+            }
+
+            result.size = CGSize(width: rowMaxX, height: y + rowHeight)
+            return result
         }
     }
 
