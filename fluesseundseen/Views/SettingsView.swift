@@ -24,6 +24,7 @@ struct SettingsView: View {
                         dataAndCacheSection
                         onboardingSection
                         infoSection
+                        europeSignatureSection
                     }
                     .padding(.top, 8)
                     .padding(.bottom, 40)
@@ -169,6 +170,28 @@ struct SettingsView: View {
             .appCard(padding: 0)
             .padding(.horizontal, 16)
         }
+    }
+
+    private var europeSignatureSection: some View {
+        VStack(spacing: 10) {
+            WavingEUFlagView(width: 124, height: 80)
+                .padding(.top, 2)
+
+            VStack(spacing: 2) {
+                Text("Proudly made in Europe")
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .multilineTextAlignment(.center)
+
+                Text("by Baltic Studios")
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .appCard()
+        .padding(.horizontal, 16)
     }
 
     private var lastUpdateText: String {

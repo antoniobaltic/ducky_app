@@ -244,7 +244,7 @@ struct OnboardingView: View {
                     .minimumScaleFactor(0.9)
             }
 
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "figure.pool.swim")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppTheme.oceanBlue)
@@ -257,9 +257,9 @@ struct OnboardingView: View {
                     .minimumScaleFactor(0.9)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .appCard()
+            .appCard(padding: 12)
 
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "megaphone.fill")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(AppTheme.coral)
@@ -272,8 +272,8 @@ struct OnboardingView: View {
                     .minimumScaleFactor(0.9)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .appCard()
-            .padding(.top, 4)
+            .appCard(padding: 12)
+            .padding(.top, 2)
         }
     }
 
@@ -533,58 +533,4 @@ struct OnboardingView: View {
     OnboardingView(hasCompletedOnboarding: .constant(false), initialPage: 3)
         .environment(LocationService.shared)
         .frame(width: 320, height: 700)
-}
-
-private struct WavingEUFlagView: View {
-    @State private var phaseFront: Angle = .zero
-    @State private var phaseBack: Angle = .degrees(160)
-    @State private var tilt = false
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(red: 0.08, green: 0.30, blue: 0.78))
-
-            WaveShape(offset: phaseFront, amplitude: 8, frequency: 1.15)
-                .fill(.white.opacity(0.15))
-                .offset(y: -30)
-                .blendMode(.screen)
-
-            WaveShape(offset: phaseBack, amplitude: 9, frequency: 1.0)
-                .fill(.black.opacity(0.12))
-                .offset(y: 34)
-                .blendMode(.multiply)
-
-            ForEach(0..<12, id: \.self) { index in
-                let angle = (Double(index) / 12.0) * (2.0 * Double.pi) - (Double.pi / 2.0)
-                Image(systemName: "star.fill")
-                    .font(.system(size: 11, weight: .black))
-                    .foregroundStyle(AppTheme.sunshine)
-                    .offset(x: cos(angle) * 56, y: sin(angle) * 38)
-            }
-        }
-        .frame(width: 248, height: 160)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(.white.opacity(0.32), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 10)
-        .rotation3DEffect(
-            .degrees(tilt ? 7 : -7),
-            axis: (x: 0, y: 1, z: 0),
-            perspective: 0.72
-        )
-        .onAppear {
-            withAnimation(.linear(duration: 2.4).repeatForever(autoreverses: false)) {
-                phaseFront = .degrees(360)
-            }
-            withAnimation(.linear(duration: 3.1).repeatForever(autoreverses: false)) {
-                phaseBack = .degrees(520)
-            }
-            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
-                tilt = true
-            }
-        }
-    }
 }
