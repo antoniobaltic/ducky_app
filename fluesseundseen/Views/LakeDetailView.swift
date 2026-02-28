@@ -72,7 +72,7 @@ struct LakeDetailView: View {
         case .warnung:
             return [
                 "Na sicher ned. Des is ka See, des is a Fehlermeldung mit Ufer.",
-                "Do zieh i die Notbremse. Oida, heit bleibt ma trocken!",
+                "Do zieh i die Notbremse. Oida, heit bleib ma trocken!",
                 "Do wüst eini? Na fix net. Geh ma ham Playstation zocken."
             ]
         }
