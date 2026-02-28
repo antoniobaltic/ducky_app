@@ -860,7 +860,7 @@ struct LakeDetailView: View {
 
                     Image(systemName: day.conditionSymbol)
                         .font(.system(size: 17))
-                        .symbolRenderingMode(.multicolor)
+                        .foregroundStyle(forecastIconColor(for: day.conditionSymbol))
                         .frame(height: 22)
 
                     Text(String(format: "%.0f°", day.tempMax))
@@ -881,6 +881,25 @@ struct LakeDetailView: View {
                 )
             }
         }
+    }
+
+    /// Returns a legible, contrasting colour for each weather symbol category.
+    /// Avoids `.multicolor` rendering whose cloud shapes are white (invisible on white cards).
+    private func forecastIconColor(for symbol: String) -> Color {
+        if symbol.hasPrefix("sun") {
+            return AppTheme.sunshine          // yellow
+        }
+        if symbol.contains("bolt") || symbol.contains("thunder") {
+            return AppTheme.coral             // orange-red for storms
+        }
+        if symbol.contains("snow") || symbol.contains("sleet") {
+            return AppTheme.lavender          // light purple for snow/sleet
+        }
+        if symbol.contains("fog") {
+            return AppTheme.textSecondary     // muted grey for fog
+        }
+        // All cloud variants (cloud.fill, cloud.sun, cloud.rain, cloud.drizzle, etc.)
+        return AppTheme.skyBlue              // readable blue for anything cloud-based
     }
 
     private func dayAbbreviation(from dateString: String) -> String {
