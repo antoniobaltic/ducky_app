@@ -908,9 +908,7 @@ struct LakeDetailView: View {
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
 
-                    Image(systemName: day.conditionSymbol)
-                        .font(.system(size: 17))
-                        .foregroundStyle(forecastIconColor(for: day.conditionSymbol))
+                    forecastIcon(symbol: day.conditionSymbol)
                         .frame(height: 22)
 
                     Text(String(format: "%.0f°", day.tempMax))
@@ -933,8 +931,29 @@ struct LakeDetailView: View {
         }
     }
 
-    /// Returns a legible, contrasting colour for each weather symbol category.
-    /// Avoids `.multicolor` rendering whose cloud shapes are white (invisible on white cards).
+    /// Renders a forecast weather icon with proper layered colouring.
+    /// - Pure sun symbols → single sunshine yellow.
+    /// - Cloud+sun symbols (cloud.sun.fill etc.) → palette: skyBlue cloud + sunshine sun.
+    /// - Everything else → single contrasting colour via forecastIconColor().
+    @ViewBuilder
+    private func forecastIcon(symbol: String) -> some View {
+        let hasSun   = symbol.contains("sun")
+        let hasCloud = symbol.contains("cloud")
+
+        if hasSun && hasCloud {
+            // Two-layer palette: cloud in blue, sun peeking out in yellow
+            Image(systemName: symbol)
+                .font(.system(size: 17))
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(AppTheme.skyBlue, AppTheme.sunshine)
+        } else {
+            Image(systemName: symbol)
+                .font(.system(size: 17))
+                .foregroundStyle(forecastIconColor(for: symbol))
+        }
+    }
+
+    /// Single-colour fallback for symbols that don't mix cloud and sun layers.
     private func forecastIconColor(for symbol: String) -> Color {
         if symbol.hasPrefix("sun") {
             return AppTheme.sunshine          // yellow
@@ -948,8 +967,8 @@ struct LakeDetailView: View {
         if symbol.contains("fog") {
             return AppTheme.textSecondary     // muted grey for fog
         }
-        // All cloud variants (cloud.fill, cloud.sun, cloud.rain, cloud.drizzle, etc.)
-        return AppTheme.skyBlue              // readable blue for anything cloud-based
+        // All plain cloud variants (cloud.fill, cloud.rain, cloud.drizzle, etc.)
+        return AppTheme.skyBlue
     }
 
     private func dayAbbreviation(from dateString: String) -> String {
