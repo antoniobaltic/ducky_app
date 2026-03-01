@@ -23,10 +23,10 @@ struct SettingsView: View {
 
                 ScrollView {
                     VStack(spacing: 28) {
+                        tipSupportSection
                         startupSection
                         dataAndCacheSection
                         onboardingSection
-                        tipSupportSection
                         infoSection
                         legalSection
                         europeSignatureSection
