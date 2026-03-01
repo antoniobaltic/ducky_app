@@ -7,9 +7,13 @@ struct ContentView: View {
     private let weatherService = WeatherService.shared
     private let lakeContentService = LakeContentService.shared
     private let lakePlaceService = LakePlaceService.shared
+    private let tipJarService = TipJarService.shared
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var selectedTab: Int
+    @State private var showTipPrompt = false
+    @State private var hasRegisteredLaunch = false
+    @State private var hasEvaluatedPromptThisSession = false
 
     init() {
         let stored = UserDefaults.standard.object(forKey: "preferredStartTab") as? Int ?? 0
@@ -33,6 +37,24 @@ struct ContentView: View {
         .environment(lakeContentService)
         .environment(lakePlaceService)
         .preferredColorScheme(.light)
+        .sheet(isPresented: $showTipPrompt) {
+            TipJarSheet(entryPoint: .prompt)
+                .environment(tipJarService)
+        }
+        .task {
+            tipJarService.configureIfNeeded()
+
+            if !hasRegisteredLaunch {
+                hasRegisteredLaunch = true
+                tipJarService.registerAppLaunch()
+            }
+
+            await tipJarService.loadProductsIfNeeded()
+            evaluateTipPromptIfNeeded()
+        }
+        .onChange(of: hasCompletedOnboarding) { _, _ in
+            evaluateTipPromptIfNeeded()
+        }
     }
 
     private var mainTabView: some View {
@@ -60,6 +82,19 @@ struct ContentView: View {
 
     private static func clampedTab(_ value: Int) -> Int {
         min(max(value, 0), 2)
+    }
+
+    private func evaluateTipPromptIfNeeded() {
+        guard hasCompletedOnboarding else { return }
+        guard !hasEvaluatedPromptThisSession else { return }
+        guard tipJarService.shouldPresentPrompt() else { return }
+
+        hasEvaluatedPromptThisSession = true
+        tipJarService.markPromptShown()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+            showTipPrompt = true
+        }
     }
 }
 
