@@ -36,7 +36,6 @@ struct ContentView: View {
         .environment(weatherService)
         .environment(lakeContentService)
         .environment(lakePlaceService)
-        .preferredColorScheme(.light)
         .sheet(isPresented: $showTipPrompt) {
             TipJarSheet(entryPoint: .prompt)
                 .environment(tipJarService)
@@ -50,9 +49,11 @@ struct ContentView: View {
             }
 
             await tipJarService.loadProductsIfNeeded()
+            bootstrapLocationIfNeeded()
             evaluateTipPromptIfNeeded()
         }
         .onChange(of: hasCompletedOnboarding) { _, _ in
+            bootstrapLocationIfNeeded()
             evaluateTipPromptIfNeeded()
         }
     }
@@ -82,6 +83,12 @@ struct ContentView: View {
 
     private static func clampedTab(_ value: Int) -> Int {
         min(max(value, 0), 2)
+    }
+
+    private func bootstrapLocationIfNeeded() {
+        guard hasCompletedOnboarding else { return }
+        locationService.requestPermission()
+        locationService.startUpdating()
     }
 
     private func evaluateTipPromptIfNeeded() {

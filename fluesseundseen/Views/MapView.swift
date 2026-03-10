@@ -16,6 +16,7 @@ struct MapView: View {
     @State private var visibleRegion: MKCoordinateRegion? = defaultRegion
     @State private var cameraPosition: MapCameraPosition = .region(defaultRegion)
     @State private var didSetInitialCamera = false
+    @State private var selectedWeatherTask: Task<Void, Never>?
 
     init(initialSelectedLake: BathingWater? = nil) {
         _selectedLake = State(initialValue: initialSelectedLake)
@@ -76,13 +77,10 @@ struct MapView: View {
             .task {
                 await dataService.loadData()
                 applyInitialCameraIfNeeded()
-                if let lake = selectedLake {
-                    selectedWeather = await weatherService.fetchWeather(for: lake)
-                }
+                loadSelectedWeather(for: selectedLake)
             }
         }
         .onChange(of: selectedLake) { _, new in
-            selectedWeather = nil
             if let lake = new {
                 withAnimation(.easeInOut(duration: 0.5)) {
                     cameraPosition = .region(
@@ -92,11 +90,15 @@ struct MapView: View {
                         )
                     )
                 }
-                Task { selectedWeather = await weatherService.fetchWeather(for: lake) }
             }
+            loadSelectedWeather(for: new)
         }
         .onChange(of: locationService.userLocation) { _, _ in
             applyInitialCameraIfNeeded()
+        }
+        .onDisappear {
+            selectedWeatherTask?.cancel()
+            selectedWeatherTask = nil
         }
     }
 
@@ -155,22 +157,25 @@ struct MapView: View {
             }
 
             HStack(spacing: 12) {
-                if let weather = selectedWeather, let airTemp = weather.airTemperature {
-                    miniInfoChip(
-                        icon: "wind",
-                        value: String(format: "%.0f°C", airTemp),
-                        color: AppTheme.airTempGreen
-                    )
-                } else {
-                    miniInfoChip(icon: "wind", value: "-", color: AppTheme.airTempGreen)
-                }
-                if let waterTemp = lake.currentWaterTemperature {
-                    miniInfoChip(icon: "drop.fill", value: String(format: "%.0f°C", waterTemp), color: AppTheme.oceanBlue)
-                } else {
-                    miniInfoChip(icon: "drop.fill", value: "-", color: AppTheme.oceanBlue)
-                }
+                miniInfoChip(
+                    icon: "wind",
+                    label: "Luft",
+                    value: selectedWeather?.airTemperature.map { String(format: "%.0f°C", $0) } ?? "–",
+                    color: AppTheme.airTempGreen
+                )
+                miniInfoChip(
+                    icon: "drop.fill",
+                    label: "Wasser",
+                    value: lake.currentWaterTemperature.map { String(format: "%.0f°C", $0) } ?? "–",
+                    color: AppTheme.oceanBlue
+                )
                 if let distanceKm = distanceToLake(lake) {
-                    miniInfoChip(icon: "location.fill", value: String(format: "%.1f km", distanceKm), color: AppTheme.teal)
+                    miniInfoChip(
+                        icon: "location.fill",
+                        label: "Distanz",
+                        value: String(format: "%.1f km", distanceKm),
+                        color: AppTheme.teal
+                    )
                 }
             }
 
@@ -217,6 +222,7 @@ struct MapView: View {
 
     private func miniInfoChip(
         icon: String,
+        label: String,
         value: String,
         color: Color,
         textColor: Color = AppTheme.textPrimary
@@ -225,7 +231,7 @@ struct MapView: View {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(color)
-            Text(value)
+            Text("\(label) \(value)")
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .foregroundStyle(textColor)
         }
@@ -244,6 +250,25 @@ struct MapView: View {
         #else
         NSWorkspace.shared.open(url)
         #endif
+    }
+
+    private func loadSelectedWeather(for lake: BathingWater?) {
+        selectedWeatherTask?.cancel()
+        selectedWeatherTask = nil
+        selectedWeather = nil
+
+        guard let lake else { return }
+        let selectedID = lake.id
+
+        selectedWeatherTask = Task {
+            let weather = await weatherService.fetchWeather(for: lake)
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard selectedLake?.id == selectedID else { return }
+                selectedWeather = weather
+            }
+        }
     }
 
     private func applyInitialCameraIfNeeded() {

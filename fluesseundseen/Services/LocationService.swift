@@ -27,6 +27,12 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     }
 
     func requestPermission() {
+        guard authorizationStatus == .notDetermined else {
+            if isAuthorized {
+                manager.startUpdatingLocation()
+            }
+            return
+        }
         manager.requestWhenInUseAuthorization()
     }
 

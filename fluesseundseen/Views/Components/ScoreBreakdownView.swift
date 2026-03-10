@@ -42,7 +42,7 @@ struct ScoreBreakdownView: View {
                 } else {
                     unavailableRow(
                         icon: "drop.fill",
-                        label: "Wassertemp.",
+                        label: "Wassertemp. (30%)",
                         message: "Messungen: Juni bis August"
                     )
                 }

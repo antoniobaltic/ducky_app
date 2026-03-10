@@ -293,7 +293,7 @@ final class WeatherService {
                 ?? 0
             let uvDouble = current["uv_index"] as? Double
             let windSpeed = current["wind_speed_10m"] as? Double
-            let precipitation = current["precipitation"] as? Double
+            let precipitationAmount = current["precipitation"] as? Double
 
             // Parse 5-day daily forecast
             var forecastDays: [ForecastDay] = []
@@ -325,7 +325,7 @@ final class WeatherService {
                 conditionDescription: descriptionForWMOCode(weatherCode),
                 feelsLike: feelsLike,
                 windSpeed: windSpeed,
-                precipitationProbability: precipitation.map { $0 > 0 ? 80 : 0 },
+                precipitationProbability: precipitationAmount.map(precipitationSignal(fromCurrentAmount:)),
                 weatherCode: weatherCode,
                 forecast: forecastDays
             )
@@ -470,6 +470,23 @@ final class WeatherService {
         case 95:          return "Gewitter"
         case 96, 99:      return "Gewitter mit Hagel"
         default:          return "Unbekannt"
+        }
+    }
+
+    private static func precipitationSignal(fromCurrentAmount amount: Double) -> Int {
+        switch amount {
+        case ..<0.05:
+            return 0
+        case ..<0.30:
+            return 15
+        case ..<1.00:
+            return 35
+        case ..<2.50:
+            return 55
+        case ..<4.50:
+            return 75
+        default:
+            return 90
         }
     }
 }

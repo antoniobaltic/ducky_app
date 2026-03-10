@@ -4,6 +4,7 @@ import MapKit
 
 struct LakeDetailView: View {
     let lake: BathingWater
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
     @Environment(LocationService.self) private var locationService
@@ -95,8 +96,13 @@ struct LakeDetailView: View {
         }
     }
 
-    private var heroTextPrimary: Color { .black.opacity(0.88) }
-    private var heroTextSecondary: Color { .black.opacity(0.70) }
+    private var heroTextPrimary: Color {
+        colorScheme == .dark ? .black.opacity(0.94) : .black.opacity(0.88)
+    }
+
+    private var heroTextSecondary: Color {
+        colorScheme == .dark ? .black.opacity(0.78) : .black.opacity(0.70)
+    }
 
     var body: some View {
         ScrollView {
@@ -108,7 +114,7 @@ struct LakeDetailView: View {
         .background(
             ZStack(alignment: .top) {
                 AppTheme.pageGradient
-                AppTheme.detailPageGradient(for: currentScore.level, isDark: false)
+                AppTheme.detailPageGradient(for: currentScore.level, isDark: colorScheme == .dark)
                 BubbleBackground(color: AppTheme.scoreColor(for: currentScore.level))
                     .opacity(0.20)
                 LinearGradient(
@@ -317,7 +323,7 @@ struct LakeDetailView: View {
         .padding(.horizontal, 24)
         .background {
             ZStack(alignment: .bottom) {
-                AppTheme.detailHeroGradient(for: currentScore.level, isDark: false)
+                AppTheme.detailHeroGradient(for: currentScore.level, isDark: colorScheme == .dark)
 
                 // Floating bubbles
                 FloatingBubblesView(count: 5, color: .white.opacity(0.25))
@@ -770,35 +776,14 @@ struct LakeDetailView: View {
     }
 
     private func formattedAddress(from place: MKMapItem) -> String? {
-        let placemark = place.placemark
-        var parts: [String] = []
-
-        // Street + number
-        if let street = placemark.thoroughfare {
-            if let number = placemark.subThoroughfare {
-                parts.append("\(street) \(number)")
-            } else {
-                parts.append(street)
-            }
+        if let singleLine = place.addressRepresentations?.fullAddress(includingRegion: false, singleLine: true),
+           !singleLine.isEmpty {
+            return singleLine
         }
-
-        // Postal code + city
-        if let postalCode = placemark.postalCode, let city = placemark.locality {
-            parts.append("\(postalCode) \(city)")
-        } else if let city = placemark.locality {
-            parts.append(city)
+        if let shortAddress = place.address?.shortAddress, !shortAddress.isEmpty {
+            return shortAddress
         }
-
-        // State (Bundesland) — only if different from city
-        if let state = placemark.administrativeArea, state != placemark.locality {
-            // Omit if we already have city + postal
-            if parts.count < 2 {
-                parts.append(state)
-            }
-        }
-
-        let result = parts.joined(separator: ", ")
-        return result.isEmpty ? nil : result
+        return place.address?.fullAddress
     }
 
     private func appleMapsMetaRow(icon: String, label: String, value: String) -> some View {
@@ -1235,7 +1220,7 @@ struct LakeDetailView: View {
                 lakeID: lake.id,
                 lakeName: lake.displayName,
                 municipalityName: lake.municipality,
-                lastKnownTemperature: lake.waterTemperature,
+                lastKnownTemperature: lake.currentWaterTemperature,
                 lastKnownQuality: lake.qualityRating
             )
             modelContext.insert(item)

@@ -59,9 +59,9 @@ struct HomeView: View {
 
         var label: String {
             switch self {
-            case .bestScore:    return "Score"
+            case .bestScore:    return "Bester Score"
             case .nearest:      return "Entfernung"
-            case .alphabetical: return "Alphabetisch"
+            case .alphabetical: return "A–Z"
             case .airTemperature: return "Lufttemperatur"
             case .waterTemperature: return "Wassertemperatur"
             }
@@ -115,13 +115,13 @@ struct HomeView: View {
 
     private var topNearbyPicks: [NearbyPick] {
         guard let userLocation = locationService.userLocation else { return [] }
-        let nearest = dataService.lakes
+        let nearbyCandidates = dataService.lakes
             .map { ($0, $0.distance(from: userLocation)) }
             .sorted { $0.1 < $1.1 }
-            .prefix(5)
+            .prefix(24)
 
         let weatherCache = weatherService.weatherCache
-        return nearest
+        return nearbyCandidates
             .map { entry in
                 NearbyPick(
                     lake: entry.0,
@@ -129,7 +129,14 @@ struct HomeView: View {
                     score: entry.0.swimScore(weather: weatherCache[entry.0.id])
                 )
             }
-            .sorted { $0.score.total > $1.score.total }
+            .sorted {
+                if $0.score.total == $1.score.total {
+                    return $0.distanceKm < $1.distanceKm
+                }
+                return $0.score.total > $1.score.total
+            }
+            .prefix(5)
+            .map(\.self)
     }
 
     private var isSearchActive: Bool {
@@ -142,7 +149,7 @@ struct HomeView: View {
 
     private var currentSortPillLabel: String {
         if sortOption == .alphabetical {
-            return sortDirection == .ascending ? "A-Z" : "Z-A"
+            return sortDirection == .ascending ? "A–Z" : "Z–A"
         }
         return sortOption.shortLabel
     }
@@ -159,6 +166,7 @@ struct HomeView: View {
     }
 
     private var heroState: DuckState {
+        if season == .winter { return .frierend }
         if dataService.isLoading { return .zufrieden }
         if let avg = cachedNearbyAverageScore { return avg.duckState }
         if let avg = cachedAverageScore { return avg.duckState }
@@ -166,6 +174,7 @@ struct HomeView: View {
     }
 
     private var heroGreeting: String {
+        if season == .winter { return "Winterpause" }
         let hour = Calendar.current.component(.hour, from: Date())
         if hour < 6  { return "Heast, immer no munter?" }
         if hour < 12 { return "Grias di!" }
@@ -174,6 +183,7 @@ struct HomeView: View {
     }
 
     private var heroMessage: String {
+        if season == .winter { return "Es ist zu kalt. Ducky friert und ist böse." }
         if dataService.isLoading { return "I schnüffel grad durchs Wasser-Orakel... gib ma a Sekundal." }
 
         let total = dataService.lakes.count
@@ -431,8 +441,6 @@ struct HomeView: View {
         }
         .task {
             await dataService.loadData()
-            locationService.requestPermission()
-            locationService.startUpdating()
             recentLakes = RecentLake.load()
 
             // Populate display immediately after data loads (no debounce)
@@ -1009,7 +1017,7 @@ struct HomeView: View {
                 lakeID: lake.id,
                 lakeName: lake.displayName,
                 municipalityName: lake.municipality,
-                lastKnownTemperature: lake.waterTemperature,
+                lastKnownTemperature: lake.currentWaterTemperature,
                 lastKnownQuality: lake.qualityRating
             )
             modelContext.insert(item)
@@ -1231,6 +1239,7 @@ private struct HomeHeroCardView: View {
     let message: String
     var error: String? = nil
 
+    @Environment(\.colorScheme) private var colorScheme
     @State private var heroAppear = false
 
     private var heroBaseColor: Color {
@@ -1250,7 +1259,7 @@ private struct HomeHeroCardView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             ZStack(alignment: .bottom) {
-                AppTheme.detailHeroGradient(for: state.scoreLevel, isDark: false)
+                AppTheme.detailHeroGradient(for: state.scoreLevel, isDark: colorScheme == .dark)
 
                 HomeHeroMotionLayer(level: state.scoreLevel)
 

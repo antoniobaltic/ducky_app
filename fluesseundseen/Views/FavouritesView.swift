@@ -39,9 +39,9 @@ struct FavouritesView: View {
 
         var label: String {
             switch self {
-            case .bestScore: return "Score"
+            case .bestScore: return "Bester Score"
             case .nearest: return "Entfernung"
-            case .alphabetical: return "Alphabetisch"
+            case .alphabetical: return "A–Z"
             case .airTemperature: return "Lufttemperatur"
             case .waterTemperature: return "Wassertemperatur"
             }
@@ -97,7 +97,7 @@ struct FavouritesView: View {
 
     private var currentSortPillLabel: String {
         if sortOption == .alphabetical {
-            return sortDirection == .ascending ? "A-Z" : "Z-A"
+            return sortDirection == .ascending ? "A–Z" : "Z–A"
         }
         return sortOption.shortLabel
     }
@@ -151,7 +151,7 @@ struct FavouritesView: View {
         case .waterTemperature:
             sortByNumeric({ fav in
                 if let lake = liveByID[fav.lakeID] {
-                    return lake.currentWaterTemperature ?? fav.lastKnownTemperature
+                    return lake.currentWaterTemperature
                 }
                 return fav.lastKnownTemperature
             }, ascending: sortDirection == .ascending)
@@ -197,13 +197,8 @@ struct FavouritesView: View {
                     }
                     .refreshable {
                         await dataService.refresh()
+                        await syncFavouriteSnapshotAndWeather(forceRefresh: true)
                         Haptics.success()
-                        for fav in favourites {
-                            if let live = liveData(for: fav) {
-                                fav.lastKnownTemperature = live.waterTemperature
-                                fav.lastKnownQuality = live.qualityRating
-                            }
-                        }
                     }
                 }
             }
@@ -237,12 +232,21 @@ struct FavouritesView: View {
             }
             .task {
                 await dataService.loadData()
-                for fav in favourites {
-                    if let live = liveData(for: fav) {
-                        fav.lastKnownTemperature = live.waterTemperature
-                        fav.lastKnownQuality = live.qualityRating
-                    }
-                }
+                await syncFavouriteSnapshotAndWeather()
+            }
+        }
+    }
+
+    private func syncFavouriteSnapshotAndWeather(forceRefresh: Bool = false) async {
+        let liveLakes = favourites.compactMap(liveData)
+        for lake in liveLakes {
+            _ = await weatherService.fetchWeather(for: lake, forceRefresh: forceRefresh)
+        }
+
+        for fav in favourites {
+            if let live = liveData(for: fav) {
+                fav.lastKnownTemperature = live.currentWaterTemperature
+                fav.lastKnownQuality = live.qualityRating
             }
         }
     }
