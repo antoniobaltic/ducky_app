@@ -36,6 +36,7 @@ struct ContentView: View {
         .environment(weatherService)
         .environment(lakeContentService)
         .environment(lakePlaceService)
+        .preferredColorScheme(.light)
         .sheet(isPresented: $showTipPrompt) {
             TipJarSheet(entryPoint: .prompt)
                 .environment(tipJarService)

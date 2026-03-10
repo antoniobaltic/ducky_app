@@ -166,7 +166,6 @@ struct HomeView: View {
     }
 
     private var heroState: DuckState {
-        if season == .winter { return .frierend }
         if dataService.isLoading { return .zufrieden }
         if let avg = cachedNearbyAverageScore { return avg.duckState }
         if let avg = cachedAverageScore { return avg.duckState }
@@ -174,7 +173,6 @@ struct HomeView: View {
     }
 
     private var heroGreeting: String {
-        if season == .winter { return "Winterpause" }
         let hour = Calendar.current.component(.hour, from: Date())
         if hour < 6  { return "Heast, immer no munter?" }
         if hour < 12 { return "Grias di!" }
@@ -183,7 +181,6 @@ struct HomeView: View {
     }
 
     private var heroMessage: String {
-        if season == .winter { return "Es ist zu kalt. Ducky friert und ist böse." }
         if dataService.isLoading { return "I schnüffel grad durchs Wasser-Orakel... gib ma a Sekundal." }
 
         let total = dataService.lakes.count
@@ -1239,7 +1236,6 @@ private struct HomeHeroCardView: View {
     let message: String
     var error: String? = nil
 
-    @Environment(\.colorScheme) private var colorScheme
     @State private var heroAppear = false
 
     private var heroBaseColor: Color {
@@ -1259,7 +1255,7 @@ private struct HomeHeroCardView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             ZStack(alignment: .bottom) {
-                AppTheme.detailHeroGradient(for: state.scoreLevel, isDark: colorScheme == .dark)
+                AppTheme.detailHeroGradient(for: state.scoreLevel, isDark: false)
 
                 HomeHeroMotionLayer(level: state.scoreLevel)
 

@@ -4,7 +4,6 @@ import MapKit
 
 struct LakeDetailView: View {
     let lake: BathingWater
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openURL) private var openURL
     @Environment(LocationService.self) private var locationService
@@ -96,13 +95,8 @@ struct LakeDetailView: View {
         }
     }
 
-    private var heroTextPrimary: Color {
-        colorScheme == .dark ? .black.opacity(0.94) : .black.opacity(0.88)
-    }
-
-    private var heroTextSecondary: Color {
-        colorScheme == .dark ? .black.opacity(0.78) : .black.opacity(0.70)
-    }
+    private var heroTextPrimary: Color { .black.opacity(0.88) }
+    private var heroTextSecondary: Color { .black.opacity(0.70) }
 
     var body: some View {
         ScrollView {
@@ -114,7 +108,7 @@ struct LakeDetailView: View {
         .background(
             ZStack(alignment: .top) {
                 AppTheme.pageGradient
-                AppTheme.detailPageGradient(for: currentScore.level, isDark: colorScheme == .dark)
+                AppTheme.detailPageGradient(for: currentScore.level, isDark: false)
                 BubbleBackground(color: AppTheme.scoreColor(for: currentScore.level))
                     .opacity(0.20)
                 LinearGradient(
@@ -323,7 +317,7 @@ struct LakeDetailView: View {
         .padding(.horizontal, 24)
         .background {
             ZStack(alignment: .bottom) {
-                AppTheme.detailHeroGradient(for: currentScore.level, isDark: colorScheme == .dark)
+                AppTheme.detailHeroGradient(for: currentScore.level, isDark: false)
 
                 // Floating bubbles
                 FloatingBubblesView(count: 5, color: .white.opacity(0.25))
