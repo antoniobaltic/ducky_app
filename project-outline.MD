@@ -35,6 +35,7 @@ Key principles:
 - the interface should feel colorful, buoyant, and emotionally legible
 - motion should feel alive through waves, bubbles, and spring transitions
 - feedback should be friendly and optimistic, with German copy and Austrian tone
+- the shipped app is intentionally light-only rather than appearance-adaptive
 - polish should support clarity, not distract from it
 
 The app uses `AppTheme` as its visual foundation:
@@ -59,6 +60,7 @@ It contains:
 - a `Top 5 in deiner Nähe` section when location is available
 - the main `Gewässer` list with sorting, filtering, search, and pagination
 - score-first browsing once weather coverage is complete
+- no forced winter-only hero override; hero messaging should stay tied to live app context rather than a hard seasonal fallback
 
 Home is also where the strict startup correctness rule is enforced. On cold launch or incomplete caches, a blocking hydration overlay is shown until weather exists for every loaded lake.
 
@@ -216,7 +218,7 @@ The following rules are foundational and should remain intact unless replaced by
 - keep weather cache mutations main-actor isolated
 - use `WeatherService` as the single weather gateway
 - preserve Ducky as the emotional center of the UX
-- keep the interface beautiful, playful, and readable in both light and dark appearance
+- keep the interface beautiful, playful, and readable in its intentional light-only presentation
 - prefer intuitive user understanding over feature complexity
 
 ## Current Implementation Character
