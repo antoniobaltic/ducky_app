@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "ducky_logo.png",
+      "filename" : "ducky_logov2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "ducky_logo_dark.png",
+      "filename" : "ducky_logo_darkv2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,25 +25,22 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "ducky_logo 2.png",
+      "filename" : "ducky_logov2 1.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
     },
     {
-      "filename" : "ducky_logo 16.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "16x16"
     },
     {
-      "filename" : "ducky_logo 32.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "16x16"
     },
     {
-      "filename" : "ducky_logo 33.png",
       "idiom" : "mac",
       "scale" : "1x",
       "size" : "32x32"
@@ -79,7 +76,7 @@
       "size" : "512x512"
     },
     {
-      "filename" : "ducky_logo 1.png",
+      "filename" : "ducky_logov2 2.png",
       "idiom" : "mac",
       "scale" : "2x",
       "size" : "512x512"
