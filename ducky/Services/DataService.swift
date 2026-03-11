@@ -20,6 +20,10 @@ final class DataService {
     @ObservationIgnored
     private var _cachedAvailableStates: [String]? = nil
 
+    /// Preview-only guard so design-time fixtures never trigger real app loading logic.
+    @ObservationIgnored
+    var isPreviewStubbed = false
+
     /// All unique states from the loaded data (O(1) on repeat access).
     var availableStates: [String] {
         if let cached = _cachedAvailableStates { return cached }
@@ -33,6 +37,10 @@ final class DataService {
 
     static let shared = DataService()
 
+    static func previewInstance() -> DataService {
+        DataService()
+    }
+
     private init() {
         // Clean up legacy UserDefaults cache entries to free space
         UserDefaults.standard.removeObject(forKey: "cached_badegewaesser")
@@ -43,6 +51,8 @@ final class DataService {
     // MARK: - Public
 
     func loadData() async {
+        guard !isPreviewStubbed else { return }
+
         if let cached = await loadFromCache() {
             await MainActor.run {
                 lakes = cached
@@ -56,6 +66,7 @@ final class DataService {
     }
 
     func refresh() async {
+        guard !isPreviewStubbed else { return }
         await fetchFromNetwork()
     }
 
@@ -96,7 +107,6 @@ final class DataService {
                 await MainActor.run {
                     self.error = "Keine Verbindung möglich."
                     isLoading = false
-                    lakes = BathingWater.previews
                 }
             }
         }

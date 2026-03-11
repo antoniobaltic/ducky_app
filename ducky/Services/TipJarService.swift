@@ -7,6 +7,13 @@ import StoreKit
 final class TipJarService {
     static let shared = TipJarService()
 
+    static func previewInstance() -> TipJarService {
+        let suiteName = "TipJarServicePreview"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defaults.removePersistentDomain(forName: suiteName)
+        return TipJarService(defaults: defaults)
+    }
+
     struct TipProductDefinition: Identifiable {
         let id: String
         let referenceName: String

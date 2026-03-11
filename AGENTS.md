@@ -207,10 +207,12 @@ Rules:
 ## Caching And Startup Invariants
 
 - `DataService` caches AGES payload in the caches directory.
-- `WeatherService` caches the weather dictionary in `weather_cache_v3.json`.
+- `WeatherService` caches the weather dictionary in `weather_cache_v4.json`.
 - Weather cache may be used stale for instant launch ranking, then refreshed in the background.
 - On startup, `HomeView` must call `WeatherService.bootstrapWeather(for:)`.
 - If full weather coverage is missing, the app shows a blocking loading overlay with progress and retry.
+- Preview fixtures are design-time only and must never leak into the real app runtime.
+- If live data loading fails, do not fall back to fake preview lakes in production.
 - Do not remove this without replacing it with an equivalent correctness guarantee.
 
 ## Score Correctness Rules

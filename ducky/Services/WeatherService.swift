@@ -59,10 +59,17 @@ final class WeatherService {
     var lastCacheUpdate: Date? { cacheTimestamp }
 
     static let shared = WeatherService()
+    static func previewInstance() -> WeatherService {
+        WeatherService()
+    }
+
     private let cacheTTL: TimeInterval = 30 * 60 // 30 minutes
     private let maxConcurrentFetches = 10
     private let maxHydrationAttempts = 3
     private let maxRescuePasses = 2
+
+    @ObservationIgnored
+    var isPreviewStubbed = false
 
     private var saveCacheTask: Task<Void, Never>?
     private var hydrationTask: Task<Void, Never>?
@@ -101,6 +108,15 @@ final class WeatherService {
     /// - If cache is stale, refresh in background without blocking launch.
     /// - If incomplete, block once and fetch missing weather for all lakes.
     func bootstrapWeather(for lakes: [BathingWater]) async {
+        guard !isPreviewStubbed else {
+            let unique = uniqueLakes(lakes)
+            hydrationTotal = unique.count
+            hydrationCompleted = unique.count
+            isHydratingAll = false
+            isUsingStaleCache = false
+            return
+        }
+
         let unique = uniqueLakes(lakes)
         guard !unique.isEmpty else {
             hydrationTotal = 0
@@ -127,6 +143,7 @@ final class WeatherService {
 
     /// Background full refresh for existing complete caches.
     func refreshAllWeatherInBackground(for lakes: [BathingWater]) {
+        guard !isPreviewStubbed else { return }
         let unique = uniqueLakes(lakes)
         guard !unique.isEmpty else { return }
         guard hydrationTask == nil else { return }
@@ -135,6 +152,15 @@ final class WeatherService {
 
     /// Ensure all requested lakes have weather. Used by startup flow.
     func hydrateAllWeather(for lakes: [BathingWater], forceRefresh: Bool) async {
+        guard !isPreviewStubbed else {
+            let unique = uniqueLakes(lakes)
+            hydrationTotal = unique.count
+            hydrationCompleted = unique.count
+            isHydratingAll = false
+            isUsingStaleCache = false
+            return
+        }
+
         if let running = hydrationTask {
             await running.value
             return

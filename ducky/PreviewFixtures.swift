@@ -1,17 +1,47 @@
 import Foundation
 
 enum PreviewFixtures {
-    static let isRunning = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+    struct AppEnvironment {
+        let dataService: DataService
+        let locationService: LocationService
+        let weatherService: WeatherService
+        let lakeContentService: LakeContentService
+        let lakePlaceService: LakePlaceService
+        let tipJarService: TipJarService
+    }
+
+    @MainActor
+    static func makeEnvironment(useFixtures: Bool = false) -> AppEnvironment {
+        let environment = AppEnvironment(
+            dataService: DataService.previewInstance(),
+            locationService: LocationService.previewInstance(),
+            weatherService: WeatherService.previewInstance(),
+            lakeContentService: LakeContentService.previewInstance(),
+            lakePlaceService: LakePlaceService.previewInstance(),
+            tipJarService: TipJarService.previewInstance()
+        )
+
+        if useFixtures {
+            installAppPreviewState(
+                dataService: environment.dataService,
+                weatherService: environment.weatherService
+            )
+        }
+
+        return environment
+    }
 
     @MainActor
     static func installAppPreviewState(
         dataService: DataService,
         weatherService: WeatherService
     ) {
+        dataService.isPreviewStubbed = true
         dataService.isLoading = false
         dataService.error = nil
         dataService.lakes = BathingWater.previews
 
+        weatherService.isPreviewStubbed = true
         weatherService.weatherCache = Dictionary(
             uniqueKeysWithValues: BathingWater.previews.map { lake in
                 (lake.id, previewWeather(for: lake))

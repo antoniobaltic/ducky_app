@@ -7,6 +7,9 @@ import Observation
 @Observable
 final class LakePlaceService {
     static let shared = LakePlaceService()
+    static func previewInstance() -> LakePlaceService {
+        LakePlaceService()
+    }
 
     var placeCache: [String: MKMapItem] = [:]
     var cacheRevision = 0

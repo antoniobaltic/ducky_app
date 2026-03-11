@@ -75,8 +75,7 @@ struct MapView: View {
             }
             .navigationTitle("Karte")
             .task {
-                if PreviewFixtures.isRunning {
-                    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+                if dataService.isPreviewStubbed {
                     applyInitialCameraIfNeeded()
                     loadSelectedWeather(for: selectedLake)
                     return
@@ -309,29 +308,25 @@ struct MapView: View {
 }
 
 #Preview {
-    let dataService = DataService.shared
-    let weatherService = WeatherService.shared
-    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+    let environment = PreviewFixtures.makeEnvironment()
 
     return MapView()
-        .environment(DataService.shared)
-        .environment(LocationService.shared)
-        .environment(WeatherService.shared)
-        .environment(LakeContentService.shared)
-        .environment(LakePlaceService.shared)
+        .environment(environment.dataService)
+        .environment(environment.locationService)
+        .environment(environment.weatherService)
+        .environment(environment.lakeContentService)
+        .environment(environment.lakePlaceService)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }
 
 #Preview("Selected Lake Card") {
-    let dataService = DataService.shared
-    let weatherService = WeatherService.shared
-    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+    let environment = PreviewFixtures.makeEnvironment(useFixtures: true)
 
     return MapView(initialSelectedLake: .preview)
-        .environment(DataService.shared)
-        .environment(LocationService.shared)
-        .environment(WeatherService.shared)
-        .environment(LakeContentService.shared)
-        .environment(LakePlaceService.shared)
+        .environment(environment.dataService)
+        .environment(environment.locationService)
+        .environment(environment.weatherService)
+        .environment(environment.lakeContentService)
+        .environment(environment.lakePlaceService)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }

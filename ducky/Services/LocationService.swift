@@ -18,6 +18,10 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
 
     static let shared = LocationService()
 
+    static func previewInstance() -> LocationService {
+        LocationService()
+    }
+
     override private init() {
         super.init()
         manager.delegate = self

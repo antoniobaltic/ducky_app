@@ -9,6 +9,9 @@ final class LakeContentService {
     var cacheRevision = 0
 
     static let shared = LakeContentService()
+    static func previewInstance() -> LakeContentService {
+        LakeContentService()
+    }
 
     private let cacheTTL: TimeInterval = 30 * 24 * 60 * 60 // 30 days
     private var diskEntries: [String: DiskEntry] = [:]

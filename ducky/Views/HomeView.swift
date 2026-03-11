@@ -437,8 +437,7 @@ struct HomeView: View {
             }
         }
         .task {
-            if PreviewFixtures.isRunning {
-                PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+            if dataService.isPreviewStubbed {
                 recentLakes = []
                 updateDisplayLakes(debounce: false, animated: false, recomputeHeroStats: true)
                 return
@@ -457,7 +456,7 @@ struct HomeView: View {
             visibleCount = 20
             updateDisplayLakes(debounce: false, animated: false, recomputeHeroStats: true)
 
-            guard !PreviewFixtures.isRunning else { return }
+            guard !dataService.isPreviewStubbed else { return }
             Task {
                 await weatherService.bootstrapWeather(for: dataService.lakes)
                 updateDisplayLakes(debounce: false, animated: false, recomputeHeroStats: true)
@@ -1463,17 +1462,15 @@ private struct HomeHeroCardPreviewContainer: View {
 }
 
 #Preview {
-    let dataService = DataService.shared
-    let weatherService = WeatherService.shared
-    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+    let environment = PreviewFixtures.makeEnvironment()
 
     return HomeView()
-        .environment(DataService.shared)
-        .environment(LocationService.shared)
-        .environment(WeatherService.shared)
-        .environment(LakeContentService.shared)
-        .environment(LakePlaceService.shared)
-        .environment(TipJarService.shared)
+        .environment(environment.dataService)
+        .environment(environment.locationService)
+        .environment(environment.weatherService)
+        .environment(environment.lakeContentService)
+        .environment(environment.lakePlaceService)
+        .environment(environment.tipJarService)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }
 

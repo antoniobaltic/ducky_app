@@ -2,12 +2,12 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    private let dataService = DataService.shared
-    private let locationService = LocationService.shared
-    private let weatherService = WeatherService.shared
-    private let lakeContentService = LakeContentService.shared
-    private let lakePlaceService = LakePlaceService.shared
-    private let tipJarService = TipJarService.shared
+    private let dataService: DataService
+    private let locationService: LocationService
+    private let weatherService: WeatherService
+    private let lakeContentService: LakeContentService
+    private let lakePlaceService: LakePlaceService
+    private let tipJarService: TipJarService
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var selectedTab: Int
@@ -15,7 +15,22 @@ struct ContentView: View {
     @State private var hasRegisteredLaunch = false
     @State private var hasEvaluatedPromptThisSession = false
 
-    init() {
+    @MainActor
+    init(
+        dataService: DataService = .shared,
+        locationService: LocationService = .shared,
+        weatherService: WeatherService = .shared,
+        lakeContentService: LakeContentService = .shared,
+        lakePlaceService: LakePlaceService = .shared,
+        tipJarService: TipJarService = .shared
+    ) {
+        self.dataService = dataService
+        self.locationService = locationService
+        self.weatherService = weatherService
+        self.lakeContentService = lakeContentService
+        self.lakePlaceService = lakePlaceService
+        self.tipJarService = tipJarService
+
         let stored = UserDefaults.standard.object(forKey: "preferredStartTab") as? Int ?? 0
         _selectedTab = State(initialValue: Self.clampedTab(stored))
     }
@@ -36,16 +51,14 @@ struct ContentView: View {
         .environment(weatherService)
         .environment(lakeContentService)
         .environment(lakePlaceService)
+        .environment(tipJarService)
         .preferredColorScheme(.light)
         .sheet(isPresented: $showTipPrompt) {
             TipJarSheet(entryPoint: .prompt)
                 .environment(tipJarService)
         }
         .task {
-            if PreviewFixtures.isRunning {
-                PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
-                return
-            }
+            guard !dataService.isPreviewStubbed else { return }
 
             tipJarService.configureIfNeeded()
 
@@ -59,7 +72,7 @@ struct ContentView: View {
             evaluateTipPromptIfNeeded()
         }
         .onChange(of: hasCompletedOnboarding) { _, _ in
-            guard !PreviewFixtures.isRunning else { return }
+            guard !dataService.isPreviewStubbed else { return }
             bootstrapLocationIfNeeded()
             evaluateTipPromptIfNeeded()
         }
@@ -113,10 +126,15 @@ struct ContentView: View {
 }
 
 #Preview {
-    let dataService = DataService.shared
-    let weatherService = WeatherService.shared
-    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+    let environment = PreviewFixtures.makeEnvironment()
 
-    return ContentView()
+    return ContentView(
+        dataService: environment.dataService,
+        locationService: environment.locationService,
+        weatherService: environment.weatherService,
+        lakeContentService: environment.lakeContentService,
+        lakePlaceService: environment.lakePlaceService,
+        tipJarService: environment.tipJarService
+    )
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }

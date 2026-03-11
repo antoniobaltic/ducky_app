@@ -963,23 +963,19 @@ private struct FavouritesQuickLakeActionsSheet: View {
 }
 
 #Preview("Empty") {
-    let dataService = DataService.shared
-    let weatherService = WeatherService.shared
-    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+    let environment = PreviewFixtures.makeEnvironment(useFixtures: true)
 
     return FavouritesView()
-        .environment(DataService.shared)
-        .environment(LocationService.shared)
-        .environment(WeatherService.shared)
-        .environment(LakeContentService.shared)
-        .environment(LakePlaceService.shared)
+        .environment(environment.dataService)
+        .environment(environment.locationService)
+        .environment(environment.weatherService)
+        .environment(environment.lakeContentService)
+        .environment(environment.lakePlaceService)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }
 
 #Preview("With Favorites") {
-    let dataService = DataService.shared
-    let weatherService = WeatherService.shared
-    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+    let environment = PreviewFixtures.makeEnvironment(useFixtures: true)
 
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: FavouriteItem.self, configurations: config)
@@ -1003,10 +999,10 @@ private struct FavouritesQuickLakeActionsSheet: View {
     context.insert(two)
 
     return FavouritesView()
-        .environment(DataService.shared)
-        .environment(LocationService.shared)
-        .environment(WeatherService.shared)
-        .environment(LakeContentService.shared)
-        .environment(LakePlaceService.shared)
+        .environment(environment.dataService)
+        .environment(environment.locationService)
+        .environment(environment.weatherService)
+        .environment(environment.lakeContentService)
+        .environment(environment.lakePlaceService)
         .modelContainer(container)
 }
