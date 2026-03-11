@@ -509,7 +509,7 @@ private struct LegalDocumentView: View {
         static let appName = "Ducky"
         static let version = "1.0.0"
         static let postalAddress = "Schörgelgasse 55\n8010 Graz\nÖsterreich"
-        static let contactEmail = "balticstudios@icloud.com"
+        static let contactEmail = "antoniobaltic@icloud.com"
     }
 
     var body: some View {

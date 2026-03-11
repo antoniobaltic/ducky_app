@@ -23,19 +23,19 @@ final class TipJarService {
 
     nonisolated static let tipCatalog: [TipProductDefinition] = [
         .init(
-            id: "balticstudios.ducky.tip.small",
+            id: "antoniobaltic.ducky.tip.small",
             referenceName: "Ducky Tip Small",
             suggestedDisplayName: "Kleines Trinkgeld",
             suggestedDescription: "Ein kleines Brot fuer Ducky."
         ),
         .init(
-            id: "balticstudios.ducky.tip.medium",
+            id: "antoniobaltic.ducky.tip.medium",
             referenceName: "Ducky Tip Medium",
             suggestedDisplayName: "Mittleres Trinkgeld",
             suggestedDescription: "Eine extra Semmel fuer Ducky."
         ),
         .init(
-            id: "balticstudios.ducky.tip.large",
+            id: "antoniobaltic.ducky.tip.large",
             referenceName: "Ducky Tip Large",
             suggestedDisplayName: "Grosses Trinkgeld",
             suggestedDescription: "Der volle Brotkorb fuer Ducky."

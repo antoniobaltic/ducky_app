@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct fluesseundseenApp: App {
+struct DuckyApp: App {
     private let tipJarService = TipJarService.shared
 
     var body: some Scene {

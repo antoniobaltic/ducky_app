@@ -7,13 +7,13 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		A80C7F1E2F4B7D7700182EC8 /* fluesseundseen.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = fluesseundseen.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A80C7F1E2F4B7D7700182EC8 /* ducky.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ducky.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A80C7F202F4B7D7700182EC8 /* fluesseundseen */ = {
+		A80C7F202F4B7D7700182EC8 /* ducky */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = fluesseundseen;
+			path = ducky;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -32,7 +32,7 @@
 		A80C7F152F4B7D7700182EC8 = {
 			isa = PBXGroup;
 			children = (
-				A80C7F202F4B7D7700182EC8 /* fluesseundseen */,
+				A80C7F202F4B7D7700182EC8 /* ducky */,
 				A80C7F1F2F4B7D7700182EC8 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -40,7 +40,7 @@
 		A80C7F1F2F4B7D7700182EC8 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A80C7F1E2F4B7D7700182EC8 /* fluesseundseen.app */,
+				A80C7F1E2F4B7D7700182EC8 /* ducky.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,9 +48,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A80C7F1D2F4B7D7700182EC8 /* fluesseundseen */ = {
+		A80C7F1D2F4B7D7700182EC8 /* ducky */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A80C7F292F4B7D7800182EC8 /* Build configuration list for PBXNativeTarget "fluesseundseen" */;
+			buildConfigurationList = A80C7F292F4B7D7800182EC8 /* Build configuration list for PBXNativeTarget "ducky" */;
 			buildPhases = (
 				A80C7F1A2F4B7D7700182EC8 /* Sources */,
 				A80C7F1B2F4B7D7700182EC8 /* Frameworks */,
@@ -61,13 +61,13 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				A80C7F202F4B7D7700182EC8 /* fluesseundseen */,
+				A80C7F202F4B7D7700182EC8 /* ducky */,
 			);
-			name = fluesseundseen;
+			name = ducky;
 			packageProductDependencies = (
 			);
-			productName = fluesseundseen;
-			productReference = A80C7F1E2F4B7D7700182EC8 /* fluesseundseen.app */;
+			productName = ducky;
+			productReference = A80C7F1E2F4B7D7700182EC8 /* ducky.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -90,7 +90,7 @@
 					};
 				};
 			};
-			buildConfigurationList = A80C7F192F4B7D7700182EC8 /* Build configuration list for PBXProject "fluesseundseen" */;
+			buildConfigurationList = A80C7F192F4B7D7700182EC8 /* Build configuration list for PBXProject "ducky" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -104,7 +104,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A80C7F1D2F4B7D7700182EC8 /* fluesseundseen */,
+				A80C7F1D2F4B7D7700182EC8 /* ducky */,
 			);
 		};
 /* End PBXProject section */
@@ -275,7 +275,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = balticstudios.ducky;
+				PRODUCT_BUNDLE_IDENTIFIER = antoniobaltic.ducky;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -323,7 +323,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = balticstudios.ducky;
+				PRODUCT_BUNDLE_IDENTIFIER = antoniobaltic.ducky;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -343,7 +343,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A80C7F192F4B7D7700182EC8 /* Build configuration list for PBXProject "fluesseundseen" */ = {
+		A80C7F192F4B7D7700182EC8 /* Build configuration list for PBXProject "ducky" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A80C7F272F4B7D7800182EC8 /* Debug */,
@@ -352,7 +352,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A80C7F292F4B7D7800182EC8 /* Build configuration list for PBXNativeTarget "fluesseundseen" */ = {
+		A80C7F292F4B7D7800182EC8 /* Build configuration list for PBXNativeTarget "ducky" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A80C7F2A2F4B7D7800182EC8 /* Debug */,

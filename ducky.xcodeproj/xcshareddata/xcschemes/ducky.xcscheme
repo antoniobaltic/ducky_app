@@ -16,9 +16,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A80C7F1D2F4B7D7700182EC8"
-               BuildableName = "fluesseundseen.app"
-               BlueprintName = "fluesseundseen"
-               ReferencedContainer = "container:fluesseundseen.xcodeproj">
+               BuildableName = "ducky.app"
+               BlueprintName = "ducky"
+               ReferencedContainer = "container:ducky.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -45,9 +45,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A80C7F1D2F4B7D7700182EC8"
-            BuildableName = "fluesseundseen.app"
-            BlueprintName = "fluesseundseen"
-            ReferencedContainer = "container:fluesseundseen.xcodeproj">
+            BuildableName = "ducky.app"
+            BlueprintName = "ducky"
+            ReferencedContainer = "container:ducky.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <LocationScenarioReference
@@ -66,9 +66,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A80C7F1D2F4B7D7700182EC8"
-            BuildableName = "fluesseundseen.app"
-            BlueprintName = "fluesseundseen"
-            ReferencedContainer = "container:fluesseundseen.xcodeproj">
+            BuildableName = "ducky.app"
+            BlueprintName = "ducky"
+            ReferencedContainer = "container:ducky.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

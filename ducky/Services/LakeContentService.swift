@@ -296,6 +296,6 @@ extension LakeContentService {
 
     nonisolated private static var wikipediaUserAgent: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        return "fluesseundseen/\(version) (iOS)"
+        return "Ducky/\(version) (iOS)"
     }
 }
