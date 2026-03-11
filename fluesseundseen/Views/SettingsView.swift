@@ -276,7 +276,7 @@ struct SettingsView: View {
                     .foregroundStyle(AppTheme.textPrimary)
                     .multilineTextAlignment(.center)
 
-                Text("by Baltic Studios")
+                Text("by Antonio Baltic")
                     .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundStyle(AppTheme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -505,7 +505,7 @@ private struct LegalDocumentView: View {
 
     private enum LegalMeta {
         static let ownerName = "Antonio Baltic"
-        static let publisher = "Baltic Studios"
+        static let publisher = "Antonio Baltic"
         static let appName = "Ducky"
         static let version = "1.0.0"
         static let postalAddress = "Schörgelgasse 55\n8010 Graz\nÖsterreich"

@@ -1,115 +1,196 @@
 # Ducky Project Outline
 
-## What This App Is
+## App Identity
 
-`fluesseundseen` is a playful Austrian lake discovery app centered around one simple question: "Where should I swim today?"
+The official product name is **Ducky**.
 
-The app combines official bathing-water data, live weather, and a friendly mascot called Ducky to turn a messy research task into a fast, emotionally clear decision. Instead of making users compare raw measurements, the app translates them into a ranked `SwimScore` and a set of clear visual cues.
+Ducky is a playful iOS app for discovering bathing lakes and rivers in Austria. Its job is to help people answer one simple question quickly and confidently:
 
-The product is designed for people who want to:
+**Where should I swim today?**
 
-- discover bathing lakes and rivers in Austria
-- compare spots by current conditions
-- find the best nearby option quickly
-- understand when the score is trustworthy and when it is not
-- enjoy a cheerful, character-led interface instead of a sterile utility
+The app combines official bathing-water data, live weather, seasonal truthfulness, and a mascot-led interface into one emotionally clear decision system called `SwimScore`.
 
-## Product Purpose
+Ducky is not meant to feel like a sterile directory or an engineering dashboard. It should feel like a cheerful local companion with strong taste, clear recommendations, and a memorable personality.
 
-The core promise of the app is not just "lake discovery." It is trustworthy swim-day decision support.
+## Core Purpose
 
-That promise depends on two things:
+Ducky exists to make swim-day decisions:
 
-- `SwimScore` must stay central to ranking and storytelling
-- rankings must not pretend to be complete when weather coverage is incomplete
+- fast
+- trustworthy
+- fun
+- visually intuitive
 
-This is why the startup flow deliberately blocks score-based browsing until weather has been hydrated for all loaded lakes. Correctness is treated as more important than a falsely fast first render.
+The app should reduce the amount of manual research a user has to do. Instead of comparing weather, water temperature, and quality data by hand, users should be able to open Ducky and immediately understand:
+
+- which lakes look best right now
+- which nearby option is worth choosing
+- whether a score can actually be trusted
+- what tradeoffs exist at a specific lake
+
+## Core User Promise
+
+The single most important product promise is this:
+
+**Ducky must never pretend that score-based ranking is ready if weather coverage is incomplete.**
+
+That rule matters because the app is built around `SwimScore`. If score ranking is incomplete or misleading, the whole product loses credibility.
+
+This means:
+
+- `SwimScore` is the primary decision engine
+- global sorting by score must only be treated as trustworthy when the necessary weather data exists
+- weather hydration and cache completeness are product requirements, not just technical details
+
+## Product Personality
+
+Ducky is the mascot, not a decorative extra.
+
+Ducky should feel:
+
+- friendly
+- slightly cheeky
+- emotionally readable
+- supportive without sounding robotic
+- playful without becoming childish nonsense
+
+Ducky is the emotional anchor in onboarding, hero messaging, loading states, score storytelling, support prompts, and celebratory moments.
+
+## Ducky's Language
+
+Ducky speaks in **friendly Austrian German with light slang**, not formal textbook German and not generic internet slang.
+
+The voice should sound:
+
+- local
+- warm
+- short and punchy
+- a little mischievous
+- easy to understand even when playful
+
+### Voice rules
+
+- Prefer Austrian phrasing over stiff Standard German.
+- Use small, natural slang touches instead of overdoing dialect.
+- Keep lines short and memorable.
+- Let Ducky react emotionally to weather, cold water, bad conditions, and perfect swim days.
+- Avoid sounding rude, aggressive, or too ironic.
+- Avoid northern-German phrasing and generic corporate copy.
+
+### Useful language patterns
+
+- `a bissl`
+- `heut`
+- `passt scho`
+- `leiwand`
+- `na geh`
+- `g'scheit`
+- `Semmel`
+- `grantig`
+- `ab ins Wasser`
+
+### Concrete examples of Ducky's voice
+
+- `Heut schaut's leiwand aus. Ab ins Wasser!`
+- `Na geh, des Wasser is a bissl frisch.`
+- `Passt scho, aber nimm da lieber a Handtuch mehr mit.`
+- `Ui, heut is g'scheit windig.`
+- `Des is a richtig feiner Badetag.`
+- `Oha, da braut sich was zam.`
+- `Da Ducky is heut zufrieden.`
+- `Heut kriegt der Schnabel fast Lust auf a Doppelsemmel.`
+- `Brrr. Da Ducky wird grantig bei so kaltem Wasser.`
+- `Schau, des Platzerl taugt was.`
+
+### Examples to avoid
+
+- `Heute herrschen optimale Badebedingungen.`
+- `Bitte beachten Sie die aktuellen Messwerte.`
+- `Mega nice, let's gooooo.`
+- `Dies ist eine ausgezeichnete Gelegenheit für einen Schwimmausflug.`
+
+The goal is not to write full dialect. The goal is to sound unmistakably Austrian, friendly, and alive.
 
 ## Design Philosophy
 
-The visual and interaction system is intentionally joyful, not neutral.
+The design should feel joyful, buoyant, and unmistakable.
 
-Key principles:
+Core visual principles:
 
-- Ducky is the personality anchor and should stay visible in primary moments
-- the interface should feel colorful, buoyant, and emotionally legible
-- motion should feel alive through waves, bubbles, and spring transitions
-- feedback should be friendly and optimistic, with German copy and Austrian tone
-- the shipped app is intentionally light-only rather than appearance-adaptive
-- polish should support clarity, not distract from it
+- bright, water-inspired colors
+- strong gradients tied to score and mood
+- rounded forms and soft geometry
+- expressive cards and chips
+- subtle motion that feels like water, air, and floating
+- light-only presentation as the intentional product look
 
-The app uses `AppTheme` as its visual foundation:
+The UI should never become bland, gray, or app-template generic. Ducky should feel polished and inviting from the first screen.
 
-- bright water-inspired colors
-- score-level color mapping
-- rounded typography and card geometry
-- soft gradients, glow, and layered motion
-- reusable card and chip patterns across screens
+## Experience Structure
 
-## User Experience Structure
-
-The app is organized into three main tabs:
+Ducky is organized around three main product surfaces plus a detailed lake view.
 
 ### Home
 
-The Home tab is the ranking and discovery hub.
+Home is the discovery and ranking hub.
 
-It contains:
+It is responsible for:
 
-- a Ducky-led hero that summarizes the current swim mood
-- a `Top 5 in deiner Nähe` section when location is available
-- the main `Gewässer` list with sorting, filtering, search, and pagination
-- score-first browsing once weather coverage is complete
-- no forced winter-only hero override; hero messaging should stay tied to live app context rather than a hard seasonal fallback
+- first-impression mood and storytelling
+- startup correctness and weather hydration
+- nearby recommendations
+- main ranking and browsing
+- search, sorting, and pagination
 
-Home is also where the strict startup correctness rule is enforced. On cold launch or incomplete caches, a blocking hydration overlay is shown until weather exists for every loaded lake.
+Home should make the best option feel obvious quickly.
 
 ### Map
 
-The Map tab focuses on spatial discovery.
+Map is for spatial exploration.
 
-It provides:
+It is responsible for:
 
-- lake pins colored by current score
-- direct geographic exploration
-- a compact lake sheet with score, location, air/water chips, and route/detail actions
-- fast access to route planning
+- score-colored lake pins
+- quick geographic browsing
+- fast comparison in context
+- direct route handoff
 
-The map experience is intentionally compact and minimal once a lake is tapped.
+The tapped-lake sheet should stay compact and useful.
 
 ### Favorites
 
-The Favorites tab is a personal shortlist.
+Favorites is the return-to-known-places surface.
 
-It emphasizes:
+It is responsible for:
 
-- score and temperature first
-- low-friction reaccess to preferred lakes
-- distance and weather context when available
-- long-press quick actions for sharing, routing, and removing favorites
+- quick reaccess to saved lakes
+- score and temperature-first scanning
+- low-friction revisit behavior
+- quick actions like sharing and routing
 
-## Core Data Sources
+### Lake Detail
 
-The app depends on two external sources:
+Lake Detail is where trust is built.
 
-- AGES bathing-water JSON: official Austrian bathing-water data
-- Open-Meteo forecast API: live weather per lake
+It should answer:
 
-These sources feed different layers of the product:
+- why the score is what it is
+- what the local conditions are
+- whether the health data is reassuring
+- how far away the place is
+- how to get there
+- what background information exists
 
-- AGES provides identity, coordinates, quality, bacteria, and seasonal water measurements
-- Open-Meteo provides live weather conditions that make ranking current and useful
+## SwimScore Philosophy
 
-## SwimScore System
-
-`SwimScore` is the app's main decision engine.
+`SwimScore` is the app's core decision engine.
 
 It combines:
 
-- weather score
-- current water temperature score when in season
-- water quality deduction
-- bacteria deduction
+- live weather
+- current water temperature when seasonally valid
+- water-quality deductions
+- bacteria deductions
 - forced overrides for closures and poor quality
 
 Current weighting:
@@ -120,125 +201,159 @@ Current weighting:
 Important rules:
 
 - quality is deduction-only
-- bacteria can further reduce the score
-- closed lakes and poor-quality lakes force warning-level totals
+- bacteria deductions are active and capped
+- forced overrides remain stronger than the normal weighted score
 - final totals are clamped to `0.0...10.0`
 
-This model is implemented in [`SwimScore.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Models/SwimScore.swift).
+`SwimScore` is not just a number. It drives:
+
+- sorting
+- badge color
+- hero gradients
+- detail-page mood
+- Ducky's emotional storytelling
 
 ## Seasonal Truthfulness
 
-The app does not treat historical summer water measurements as if they were current year-round.
+Ducky must not treat stale summer measurements as current all year.
 
-`Season` controls this behavior:
+Seasonality rules:
 
-- only current-season June to August measurements are treated as current water temperatures
-- outside the active bathing season, water temperature becomes unknown for score and UI purposes
-- off-season messaging and visual feedback should acknowledge that limitation clearly
+- current water temperature is only trusted when seasonally valid
+- outside the relevant bathing period, water temperature may become unknown
+- off-season behavior must be honest in score logic and UI copy
+- missing current water temperature should degrade gracefully to weather-only scoring
 
-This avoids misleading users with stale water-temperature data.
+This is one of the main trust-preserving behaviors in the app.
+
+## Data Sources
+
+Ducky relies on:
+
+- AGES bathing-water data for official lake information, quality, bacteria, and measurements
+- Open-Meteo for live weather conditions
+- Apple Maps for place metadata and routing
+- Wikipedia for local background content
+
+AGES gives the official bathing-water truth.
+Open-Meteo gives the current weather layer.
+Together they make the ranking useful.
 
 ## Architecture Overview
 
-### App Entry
+The architecture is a SwiftUI app with shared singleton-style services and a score-driven UI.
 
-- App entry: [`fluesseundseenApp.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/fluesseundseenApp.swift)
-- Root composition: [`ContentView.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/ContentView.swift)
+### Entry layer
 
-`ContentView` owns shared singleton services and injects them into the tab tree through SwiftUI environments.
+- `ContentView` is the root shell
+- it injects the main shared services into the environment
+- it controls onboarding vs main app flow
+- it handles app-level startup concerns like location bootstrap and support prompts
 
-### Main Services
+### Main surfaces
 
-- [`DataService.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Services/DataService.swift)
+- `HomeView`
+- `MapView`
+- `FavouritesView`
+- `LakeDetailView`
+- `SettingsView`
+
+### Core services
+
+- `DataService`
   Loads, parses, caches, and refreshes AGES lake data.
-- [`WeatherService.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Services/WeatherService.swift)
-  Fetches, caches, hydrates, and deduplicates weather data across the app.
-- [`LocationService.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Services/LocationService.swift)
-  Wraps Core Location authorization and user updates.
-- [`LakeContentService.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Services/LakeContentService.swift)
+- `WeatherService`
+  Fetches, hydrates, caches, and refreshes weather data.
+- `LocationService`
+  Wraps Core Location authorization and updates.
+- `LakeContentService`
   Resolves Wikipedia summaries and related content.
-- [`LakePlaceService.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Services/LakePlaceService.swift)
-  Resolves Apple Maps place metadata for detail pages.
+- `LakePlaceService`
+  Resolves Apple Maps place metadata.
+- `TipJarService`
+  Handles optional support products and StoreKit purchase flow.
 
-### Key Models
+### Core models
 
-- [`BathingWater.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Models/BathingWater.swift)
-  Core lake model, decoding, naming cleanup, seasonal temperature access, quality helpers, distance helpers.
-- [`SwimScore.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Models/SwimScore.swift)
-  Composite score logic and level mapping.
-- [`Season.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Models/Season.swift)
-  Seasonality, measurement freshness, and seasonal UI semantics.
-- [`DuckState.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Models/DuckState.swift)
-  Mascot expression and tone model.
-- [`FavouriteItem.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Models/FavouriteItem.swift)
+- `BathingWater`
+  Main lake model and helper logic.
+- `SwimScore`
+  Scoring formula, deductions, level mapping.
+- `Season`
+  Freshness and off-season logic.
+- `DuckState`
+  Emotional state model for the mascot.
+- `FavouriteItem`
   Local persisted favorites via SwiftData.
 
-### Main Views
+### Design system
 
-- [`HomeView.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Views/HomeView.swift)
-  Startup orchestration, hero, nearby ranking, search, filtering, main list.
-- [`MapView.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Views/MapView.swift)
-  Spatial exploration and compact selection sheet.
-- [`FavouritesView.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Views/FavouritesView.swift)
-  Personal shortlist and score-first revisit flow.
-- [`LakeDetailView.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Views/LakeDetailView.swift)
-  Deep dive into a single lake with score explanation, local weather, health data, Apple Maps, and Wikipedia.
+- `AppTheme`
 
-### Design System
+`AppTheme` centralizes:
 
-- [`AppTheme.swift`](/Users/antoniobaltic/Desktop/apps/fluesseundseen/fluesseundseen/Views/Components/AppTheme.swift)
-  Tokens for colors, typography, gradients, corner radii, and animation timing.
-
-Supporting component files provide reusable score badges, lake rows, wave effects, bubble effects, quality badges, and breakdown cards.
+- color tokens
+- score colors
+- typography
+- gradients
+- shared spacing and corner styles
+- motion timing and spring behavior
 
 ## Startup and Caching Strategy
 
-Startup speed and score correctness are intentionally balanced through layered caching:
+Ducky balances fast startup with score correctness through layered caching.
 
-- AGES data is cached on disk by `DataService`
-- weather data is cached on disk by `WeatherService`
-- stale weather cache can be used for instant launch ranking
-- stale-but-complete weather should refresh in the background
-- incomplete weather must trigger full hydration before ranking is trusted
+Key rules:
 
-This produces three important launch modes:
+- lake data is cached on disk
+- weather data is cached on disk
+- stale but complete weather can support instant launch and then refresh in background
+- incomplete weather must trigger blocking hydration before score-first browsing is trusted
 
-1. Cold launch with no cache
-   The app loads AGES data, hydrates weather, and blocks score browsing until complete.
-2. Warm launch with fresh complete cache
-   The app can rank immediately.
-3. Warm launch with stale complete cache
-   The app can rank immediately and refresh in the background.
+This creates three important launch modes:
 
-## Non-Negotiable Product Rules
+1. Cold launch
+   Ducky loads lake data, hydrates weather, and blocks score browsing until ready.
+2. Warm launch with complete fresh cache
+   Ducky can rank immediately.
+3. Warm launch with complete stale cache
+   Ducky can rank immediately, then refresh in the background.
 
-The following rules are foundational and should remain intact unless replaced by something equally trustworthy:
+## Emotional UX Rules
 
-- do not present global score ranking as ready while weather coverage is partial
-- keep weather cache mutations main-actor isolated
-- use `WeatherService` as the single weather gateway
-- preserve Ducky as the emotional center of the UX
-- keep the interface beautiful, playful, and readable in its intentional light-only presentation
-- prefer intuitive user understanding over feature complexity
+Ducky should stay visible in the moments that matter most:
 
-## Current Implementation Character
+- onboarding
+- home hero
+- loading and waiting states
+- score storytelling
+- success moments
+- tip jar gratitude moments
 
-The app is not a generic “travel list.” It is a score-driven swim companion with strong editorial tone.
+The mascot should not disappear into the background as the app matures. More polish should make Ducky feel more alive, not less important.
 
-Its current character comes from:
+## Non-Negotiables
 
-- localized Austrian copy
-- mascot-led feedback loops
-- score-colored gradients and badges
-- motion that reinforces water, weather, and mood
-- data truthfulness around seasonality and completeness
+The following product rules should remain intact unless they are replaced by something equally strong:
 
-## In Short
+- never present score ranking as fully trustworthy when weather coverage is incomplete
+- preserve the app's beautiful, colorful, light-only visual identity
+- keep Ducky central to the emotional experience
+- prefer clarity over feature bloat
+- preserve seasonal truthfulness around water temperature
+- keep motion meaningful rather than noisy
+- keep the interface intuitive even when the data model gets richer
 
-Ducky succeeds when it does three things at once:
+## Success Criteria
 
-1. makes Austrian swim discovery feel fun
-2. makes the best option obvious quickly
-3. earns trust by being honest about data quality and coverage
+Ducky succeeds when it does all of the following at once:
 
-That combination of delight and correctness is the real product.
+1. makes Austrian lake discovery feel joyful
+2. makes the best current option obvious quickly
+3. earns trust through honest data behavior
+4. feels distinctive because of Ducky's personality and voice
+5. remains polished, fast, and readable
+
+## One-Sentence Summary
+
+**Ducky is a playful Austrian swim-day companion that turns official water data and live weather into a trustworthy, colorful, mascot-led recommendation experience.**

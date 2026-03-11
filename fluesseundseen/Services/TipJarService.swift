@@ -7,6 +7,13 @@ import StoreKit
 final class TipJarService {
     static let shared = TipJarService()
 
+    struct TipProductDefinition: Identifiable {
+        let id: String
+        let referenceName: String
+        let suggestedDisplayName: String
+        let suggestedDescription: String
+    }
+
     enum PurchaseOutcome {
         case success
         case cancelled
@@ -14,13 +21,28 @@ final class TipJarService {
         case failed
     }
 
-    // Replace these product identifiers with the exact IDs from App Store Connect.
-    nonisolated static let tipProductIDs: [String] = [
-        "balticstudios.ducky.tip.small",
-        "balticstudios.ducky.tip.medium",
-        "balticstudios.ducky.tip.large"
+    nonisolated static let tipCatalog: [TipProductDefinition] = [
+        .init(
+            id: "balticstudios.ducky.tip.small",
+            referenceName: "Ducky Tip Small",
+            suggestedDisplayName: "Kleines Trinkgeld",
+            suggestedDescription: "Ein kleines Brot fuer Ducky."
+        ),
+        .init(
+            id: "balticstudios.ducky.tip.medium",
+            referenceName: "Ducky Tip Medium",
+            suggestedDisplayName: "Mittleres Trinkgeld",
+            suggestedDescription: "Eine extra Semmel fuer Ducky."
+        ),
+        .init(
+            id: "balticstudios.ducky.tip.large",
+            referenceName: "Ducky Tip Large",
+            suggestedDisplayName: "Grosses Trinkgeld",
+            suggestedDescription: "Der volle Brotkorb fuer Ducky."
+        )
     ]
 
+    nonisolated static let tipProductIDs = tipCatalog.map(\.id)
     nonisolated private static let tipProductIDSet = Set(tipProductIDs)
 
     private enum Keys {
@@ -82,6 +104,11 @@ final class TipJarService {
         do {
             let fetched = try await Product.products(for: Self.tipProductIDs)
             products = fetched.sorted { $0.price < $1.price }
+
+            let missingIDs = Self.tipProductIDSet.subtracting(fetched.map(\.id)).sorted()
+            if !missingIDs.isEmpty {
+                purchaseError = "Diese Produkt-IDs fehlen noch in App Store Connect: \(missingIDs.joined(separator: ", "))"
+            }
         } catch {
             purchaseError = "Trinkgeld-Optionen konnten gerade nicht geladen werden."
         }

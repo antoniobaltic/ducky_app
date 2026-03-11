@@ -101,10 +101,26 @@ struct TipJarSheet: View {
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
 
-                    Text("Lege zuerst drei In-App-Purchase Produkte in App Store Connect an und nutze die gleichen Produkt-IDs im Code.")
+                    Text("Lege in App Store Connect drei konsumierbare In-App-Kaeufe an und nutze exakt diese Produkt-IDs:")
                         .font(.system(size: 13, weight: .regular, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(TipJarService.tipCatalog) { definition in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(definition.referenceName)
+                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(AppTheme.textPrimary)
+
+                                Text(definition.id)
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                            }
+                        }
+                    }
+                    .padding(10)
+                    .background(AppTheme.searchBarBackground.opacity(0.85), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                     Button {
                         Task { await tipJarService.loadProducts() }
