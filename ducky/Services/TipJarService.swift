@@ -30,7 +30,7 @@ final class TipJarService {
 
     nonisolated static let tipCatalog: [TipProductDefinition] = [
         .init(
-            id: "antoniobaltic.ducky.tip.small",
+            id: "antoniobaltic.ducky.tip.toast",
             referenceName: "Ducky Tip Small",
             suggestedDisplayName: "Toast",
             suggestedDescription: "Eine Scheibe Toast fuer Ducky."
