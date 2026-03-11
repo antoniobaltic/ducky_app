@@ -101,7 +101,7 @@ struct TipJarSheet: View {
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
 
-                    Text("Lege in App Store Connect drei konsumierbare In-App-Kaeufe an und nutze exakt diese Produkt-IDs:")
+                    Text("Die Trinkgeld-Optionen werden freigeschaltet, sobald sie in App Store Connect fertig eingerichtet sind.")
                         .font(.system(size: 13, weight: .regular, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -109,13 +109,14 @@ struct TipJarSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(TipJarService.tipCatalog) { definition in
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(definition.referenceName)
+                                Text(definition.suggestedDisplayName)
                                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                                     .foregroundStyle(AppTheme.textPrimary)
 
-                                Text(definition.id)
-                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                Text(definition.suggestedDescription)
+                                    .font(.system(size: 11, weight: .medium, design: .rounded))
                                     .foregroundStyle(AppTheme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }

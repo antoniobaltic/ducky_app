@@ -107,7 +107,10 @@ final class TipJarService {
 
             let missingIDs = Self.tipProductIDSet.subtracting(fetched.map(\.id)).sorted()
             if !missingIDs.isEmpty {
-                purchaseError = "Diese Produkt-IDs fehlen noch in App Store Connect: \(missingIDs.joined(separator: ", "))"
+                purchaseError = "Trinkgeld-Optionen sind gerade noch nicht verfuegbar."
+                #if DEBUG
+                print("Missing tip jar product IDs: \(missingIDs.joined(separator: ", "))")
+                #endif
             }
         } catch {
             purchaseError = "Trinkgeld-Optionen konnten gerade nicht geladen werden."

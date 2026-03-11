@@ -324,7 +324,8 @@ Configured product namespace:
 Important notes:
 
 - These are consumable in-app purchases.
-- The app now surfaces missing product IDs when StoreKit cannot load them.
+- The app should not expose raw product IDs or developer-facing reference names to users when StoreKit cannot load products.
+- Missing product diagnostics may be logged in debug output, but user-facing fallback copy should stay clean and human-readable.
 - The Xcode project includes the `In-App Purchase` capability.
 - App Store Connect setup is still required before the tip jar works in production or TestFlight.
 

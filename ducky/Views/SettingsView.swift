@@ -505,7 +505,6 @@ private struct LegalDocumentView: View {
 
     private enum LegalMeta {
         static let ownerName = "Antonio Baltic"
-        static let publisher = "Antonio Baltic"
         static let appName = "Ducky"
         static let version = "1.0.0"
         static let postalAddress = "Schörgelgasse 55\n8010 Graz\nÖsterreich"
@@ -573,7 +572,6 @@ private struct LegalDocumentView: View {
                 heading: "1. Verantwortlicher",
                 lines: [
                     "\(LegalMeta.ownerName)",
-                    "\(LegalMeta.publisher)",
                     "Adresse:\n\(LegalMeta.postalAddress)",
                     "Kontakt: \(LegalMeta.contactEmail)"
                 ]
@@ -635,7 +633,6 @@ private struct LegalDocumentView: View {
                 heading: "Medieninhaber & Herausgeber",
                 lines: [
                     LegalMeta.ownerName,
-                    "Publishing-Name: \(LegalMeta.publisher)",
                     "App: \(LegalMeta.appName) (\(LegalMeta.version))"
                 ]
             )
