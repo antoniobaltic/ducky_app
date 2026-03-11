@@ -75,6 +75,13 @@ struct MapView: View {
             }
             .navigationTitle("Karte")
             .task {
+                if PreviewFixtures.isRunning {
+                    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+                    applyInitialCameraIfNeeded()
+                    loadSelectedWeather(for: selectedLake)
+                    return
+                }
+
                 await dataService.loadData()
                 applyInitialCameraIfNeeded()
                 loadSelectedWeather(for: selectedLake)
@@ -172,7 +179,7 @@ struct MapView: View {
                 if let distanceKm = distanceToLake(lake) {
                     miniInfoChip(
                         icon: "location.fill",
-                        label: "Distanz",
+                        label: "",
                         value: String(format: "%.1f km", distanceKm),
                         color: AppTheme.teal
                     )
@@ -227,11 +234,13 @@ struct MapView: View {
         color: Color,
         textColor: Color = AppTheme.textPrimary
     ) -> some View {
-        HStack(spacing: 4) {
+        let text = label.isEmpty ? value : "\(label) \(value)"
+
+        return HStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(color)
-            Text("\(label) \(value)")
+            Text(text)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .foregroundStyle(textColor)
         }
@@ -300,17 +309,29 @@ struct MapView: View {
 }
 
 #Preview {
-    MapView()
+    let dataService = DataService.shared
+    let weatherService = WeatherService.shared
+    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+
+    return MapView()
         .environment(DataService.shared)
         .environment(LocationService.shared)
         .environment(WeatherService.shared)
+        .environment(LakeContentService.shared)
+        .environment(LakePlaceService.shared)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }
 
 #Preview("Selected Lake Card") {
-    MapView(initialSelectedLake: .preview)
+    let dataService = DataService.shared
+    let weatherService = WeatherService.shared
+    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+
+    return MapView(initialSelectedLake: .preview)
         .environment(DataService.shared)
         .environment(LocationService.shared)
         .environment(WeatherService.shared)
+        .environment(LakeContentService.shared)
+        .environment(LakePlaceService.shared)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }

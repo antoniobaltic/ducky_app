@@ -42,6 +42,11 @@ struct ContentView: View {
                 .environment(tipJarService)
         }
         .task {
+            if PreviewFixtures.isRunning {
+                PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+                return
+            }
+
             tipJarService.configureIfNeeded()
 
             if !hasRegisteredLaunch {
@@ -54,6 +59,7 @@ struct ContentView: View {
             evaluateTipPromptIfNeeded()
         }
         .onChange(of: hasCompletedOnboarding) { _, _ in
+            guard !PreviewFixtures.isRunning else { return }
             bootstrapLocationIfNeeded()
             evaluateTipPromptIfNeeded()
         }
@@ -107,6 +113,10 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    let dataService = DataService.shared
+    let weatherService = WeatherService.shared
+    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+
+    return ContentView()
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }

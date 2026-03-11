@@ -60,8 +60,9 @@ final class WeatherService {
 
     static let shared = WeatherService()
     private let cacheTTL: TimeInterval = 30 * 60 // 30 minutes
-    private let maxConcurrentFetches = 24
+    private let maxConcurrentFetches = 10
     private let maxHydrationAttempts = 3
+    private let maxRescuePasses = 2
 
     private var saveCacheTask: Task<Void, Never>?
     private var hydrationTask: Task<Void, Never>?
@@ -213,6 +214,7 @@ final class WeatherService {
         var remaining = toFetch
         for attempt in 1...maxHydrationAttempts {
             guard !remaining.isEmpty else { break }
+            guard !Task.isCancelled else { break }
 
             await fetchBatchWeather(for: remaining, forceRefresh: forceRefresh)
             remaining = remaining.filter { weatherCache[$0.id] == nil }
@@ -225,6 +227,14 @@ final class WeatherService {
             if !remaining.isEmpty && attempt < maxHydrationAttempts {
                 try? await Task.sleep(for: .milliseconds(350 * attempt))
             }
+        }
+
+        if !remaining.isEmpty {
+            remaining = await rescueRemainingWeather(
+                unresolved: remaining,
+                totalLakeCount: lakes.count,
+                showProgress: showProgress
+            )
         }
 
         if showProgress {
@@ -262,6 +272,44 @@ final class WeatherService {
         }
     }
 
+    private func rescueRemainingWeather(
+        unresolved: [BathingWater],
+        totalLakeCount: Int,
+        showProgress: Bool
+    ) async -> [BathingWater] {
+        var remaining = unresolved
+
+        for pass in 1...maxRescuePasses {
+            guard !remaining.isEmpty else { break }
+            guard !Task.isCancelled else { break }
+
+            let currentPass = remaining
+            for lake in currentPass {
+                guard !Task.isCancelled else { break }
+
+                let wasMissing = weatherCache[lake.id] == nil
+                _ = await fetchWeather(for: lake, forceRefresh: true)
+
+                if showProgress, wasMissing, weatherCache[lake.id] != nil {
+                    hydrationCompleted = min(totalLakeCount, hydrationCompleted + 1)
+                }
+
+                try? await Task.sleep(for: .milliseconds(160))
+            }
+
+            remaining = currentPass.filter { weatherCache[$0.id] == nil }
+            if showProgress {
+                hydrationCompleted = totalLakeCount - remaining.count
+            }
+
+            if !remaining.isEmpty && pass < maxRescuePasses {
+                try? await Task.sleep(for: .milliseconds(500 * pass))
+            }
+        }
+
+        return remaining
+    }
+
     private func uniqueLakes(_ lakes: [BathingWater]) -> [BathingWater] {
         var seen: Set<String> = []
         var result: [BathingWater] = []
@@ -282,7 +330,12 @@ final class WeatherService {
         guard let url = URL(string: urlString) else { return nil }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 12
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode)
+            else { return nil }
             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let current = json["current"] as? [String: Any] else { return nil }
 

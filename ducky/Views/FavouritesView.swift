@@ -963,14 +963,24 @@ private struct FavouritesQuickLakeActionsSheet: View {
 }
 
 #Preview("Empty") {
-    FavouritesView()
+    let dataService = DataService.shared
+    let weatherService = WeatherService.shared
+    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+
+    return FavouritesView()
         .environment(DataService.shared)
         .environment(LocationService.shared)
         .environment(WeatherService.shared)
+        .environment(LakeContentService.shared)
+        .environment(LakePlaceService.shared)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }
 
 #Preview("With Favorites") {
+    let dataService = DataService.shared
+    let weatherService = WeatherService.shared
+    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: FavouriteItem.self, configurations: config)
     let context = container.mainContext
@@ -996,5 +1006,7 @@ private struct FavouritesQuickLakeActionsSheet: View {
         .environment(DataService.shared)
         .environment(LocationService.shared)
         .environment(WeatherService.shared)
+        .environment(LakeContentService.shared)
+        .environment(LakePlaceService.shared)
         .modelContainer(container)
 }

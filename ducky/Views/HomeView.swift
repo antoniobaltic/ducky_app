@@ -437,6 +437,13 @@ struct HomeView: View {
             }
         }
         .task {
+            if PreviewFixtures.isRunning {
+                PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+                recentLakes = []
+                updateDisplayLakes(debounce: false, animated: false, recomputeHeroStats: true)
+                return
+            }
+
             await dataService.loadData()
             recentLakes = RecentLake.load()
 
@@ -449,6 +456,8 @@ struct HomeView: View {
         .onChange(of: dataService.lakes) {
             visibleCount = 20
             updateDisplayLakes(debounce: false, animated: false, recomputeHeroStats: true)
+
+            guard !PreviewFixtures.isRunning else { return }
             Task {
                 await weatherService.bootstrapWeather(for: dataService.lakes)
                 updateDisplayLakes(debounce: false, animated: false, recomputeHeroStats: true)
@@ -1454,10 +1463,17 @@ private struct HomeHeroCardPreviewContainer: View {
 }
 
 #Preview {
-    HomeView()
+    let dataService = DataService.shared
+    let weatherService = WeatherService.shared
+    PreviewFixtures.installAppPreviewState(dataService: dataService, weatherService: weatherService)
+
+    return HomeView()
         .environment(DataService.shared)
         .environment(LocationService.shared)
         .environment(WeatherService.shared)
+        .environment(LakeContentService.shared)
+        .environment(LakePlaceService.shared)
+        .environment(TipJarService.shared)
         .modelContainer(for: FavouriteItem.self, inMemory: true)
 }
 
