@@ -32,20 +32,20 @@ final class TipJarService {
         .init(
             id: "antoniobaltic.ducky.tip.small",
             referenceName: "Ducky Tip Small",
-            suggestedDisplayName: "Kleines Trinkgeld",
-            suggestedDescription: "Ein kleines Brot fuer Ducky."
+            suggestedDisplayName: "Toast",
+            suggestedDescription: "Eine Scheibe Toast fuer Ducky."
         ),
         .init(
             id: "antoniobaltic.ducky.tip.medium",
             referenceName: "Ducky Tip Medium",
-            suggestedDisplayName: "Mittleres Trinkgeld",
-            suggestedDescription: "Eine extra Semmel fuer Ducky."
+            suggestedDisplayName: "Semmel",
+            suggestedDescription: "Eine frische Semmel fuer Ducky."
         ),
         .init(
             id: "antoniobaltic.ducky.tip.large",
             referenceName: "Ducky Tip Large",
-            suggestedDisplayName: "Grosses Trinkgeld",
-            suggestedDescription: "Der volle Brotkorb fuer Ducky."
+            suggestedDisplayName: "Brotzeit",
+            suggestedDescription: "Eine ordentliche Brotzeit fuer Ducky."
         )
     ]
 

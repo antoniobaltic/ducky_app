@@ -167,7 +167,7 @@ struct TipJarSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if let error = tipJarService.purchaseError {
+            if let error = tipJarService.purchaseError, !tipJarService.products.isEmpty {
                 Divider()
                 Text(error)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
