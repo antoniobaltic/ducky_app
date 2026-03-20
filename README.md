@@ -2,7 +2,7 @@
 
 Your swim-day companion for Austrian lakes. Ducky combines live weather, water temperature, and official water quality into a single **SwimScore** (0–10) so you know instantly whether it's worth jumping in.
 
-Available on the [App Store](https://apps.apple.com/app/id6760430747).
+Available on the [App Store](https://apps.apple.com/at/app/ducky/id6760419989).
 
 ## Features
 
