@@ -196,10 +196,12 @@ struct SwimScore {
                 score += 8.6 + (airTemp - 26) * 0.35   // 26 -> 8.6, 30 -> 10
             } else if airTemp >= 22 {
                 score += 7.0 + (airTemp - 22) * 0.40   // 22 -> 7.0, 26 -> 8.6
+            } else if airTemp >= 20 {
+                score += 6.0 + (airTemp - 20) * 0.50   // 20 -> 6.0, 22 -> 7.0
             } else if airTemp >= 18 {
-                score += 4.2 + (airTemp - 18) * 0.70   // 18 -> 4.2, 22 -> 7.0
+                score += 4.8 + (airTemp - 18) * 0.60   // 18 -> 4.8, 20 -> 6.0
             } else if airTemp >= 14 {
-                score += 2.2 + (airTemp - 14) * 0.50   // 14 -> 2.2, 18 -> 4.2
+                score += 2.2 + (airTemp - 14) * 0.65   // 14 -> 2.2, 18 -> 4.8
             } else if airTemp >= 8 {
                 score += 0.8 + (airTemp - 8) * 0.2333  // 8 -> 0.8, 14 -> 2.2
             } else {

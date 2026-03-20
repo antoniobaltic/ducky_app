@@ -73,7 +73,7 @@ struct MapView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .navigationTitle("Karte")
+            .navigationBarHidden(true)
             .task {
                 if dataService.isPreviewStubbed {
                     applyInitialCameraIfNeeded()
@@ -166,20 +166,20 @@ struct MapView: View {
                 miniInfoChip(
                     icon: "wind",
                     label: "Luft",
-                    value: selectedWeather?.airTemperature.map { String(format: "%.0f°C", $0) } ?? "–",
+                    value: selectedWeather?.airTemperature.map { "\($0.formatted(.number.precision(.fractionLength(0))))°C" } ?? "–",
                     color: AppTheme.airTempGreen
                 )
                 miniInfoChip(
                     icon: "drop.fill",
                     label: "Wasser",
-                    value: lake.currentWaterTemperature.map { String(format: "%.0f°C", $0) } ?? "–",
+                    value: lake.currentWaterTemperature.map { "\($0.formatted(.number.precision(.fractionLength(0))))°C" } ?? "–",
                     color: AppTheme.oceanBlue
                 )
                 if let distanceKm = distanceToLake(lake) {
                     miniInfoChip(
                         icon: "location.fill",
                         label: "",
-                        value: String(format: "%.1f km", distanceKm),
+                        value: "\(distanceKm.formatted(.number.precision(.fractionLength(1)))) km",
                         color: AppTheme.teal
                     )
                 }
@@ -271,11 +271,8 @@ struct MapView: View {
         selectedWeatherTask = Task {
             let weather = await weatherService.fetchWeather(for: lake)
             guard !Task.isCancelled else { return }
-
-            await MainActor.run {
-                guard selectedLake?.id == selectedID else { return }
-                selectedWeather = weather
-            }
+            guard selectedLake?.id == selectedID else { return }
+            selectedWeather = weather
         }
     }
 
@@ -316,7 +313,7 @@ struct MapView: View {
         .environment(environment.weatherService)
         .environment(environment.lakeContentService)
         .environment(environment.lakePlaceService)
-        .modelContainer(for: FavouriteItem.self, inMemory: true)
+        .modelContainer(for: [FavouriteItem.self, LakeVisit.self, LakeNote.self], inMemory: true)
 }
 
 #Preview("Selected Lake Card") {
@@ -328,5 +325,5 @@ struct MapView: View {
         .environment(environment.weatherService)
         .environment(environment.lakeContentService)
         .environment(environment.lakePlaceService)
-        .modelContainer(for: FavouriteItem.self, inMemory: true)
+        .modelContainer(for: [FavouriteItem.self, LakeVisit.self, LakeNote.self], inMemory: true)
 }

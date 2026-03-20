@@ -7,6 +7,7 @@ struct SwimScoreBadge: View {
     let score: SwimScore
     let size: BadgeSize
     var showHeroDetails: Bool = true
+    var isVisited: Bool = false
 
     enum BadgeSize {
         case small   // horizontal card overlay
@@ -64,6 +65,16 @@ struct SwimScoreBadge: View {
                 .font(.system(size: size.fontSize, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
         }
+        .overlay(alignment: .bottomTrailing) {
+            if isVisited {
+                let checkSize: CGFloat = size.diameter * 0.36
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: checkSize))
+                    .foregroundStyle(AppTheme.freshGreen)
+                    .background(Circle().fill(.white).frame(width: checkSize * 0.7, height: checkSize * 0.7))
+                    .offset(x: checkSize * 0.15, y: checkSize * 0.15)
+            }
+        }
         .overlay {
             if size == .large {
                 VStack(spacing: 0) {
@@ -95,51 +106,12 @@ struct SwimScoreBadge: View {
 
     private var heroCircle: some View {
         ZStack {
-            // Outer glow ring
-            Circle()
-                .fill(AppTheme.scoreColor(for: score.level).opacity(0.2))
-                .frame(width: size.diameter + 16, height: size.diameter + 16)
-
-            Circle()
-                .fill(AppTheme.scoreGradient(for: score.level))
-                .frame(width: size.diameter, height: size.diameter)
-
-            VStack(spacing: -2) {
-                Text(scoreText)
-                    .font(.system(size: size.fontSize, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-
-                Text("/10")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-        }
-    }
-
-    private var scoreText: String {
-        if score.total == 10.0 {
-            return "10"
-        }
-        return String(format: "%.1f", score.total)
-    }
-}
-
-// MARK: - Score Pin for Map
-
-struct ScorePinView: View {
-    let score: SwimScore
-
-    var body: some View {
-        ZStack {
-            // Pin shape
             Circle()
                 .fill(AppTheme.scoreColor(for: score.level))
-                .frame(width: 36, height: 36)
-                .shadow(color: AppTheme.scoreColor(for: score.level).opacity(0.4), radius: 4, y: 2)
+                .frame(width: size.diameter, height: size.diameter)
 
             Text(scoreText)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .monospacedDigit()
+                .font(.system(size: size.fontSize, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
         }
     }
@@ -148,7 +120,7 @@ struct ScorePinView: View {
         if score.total == 10.0 {
             return "10"
         }
-        return String(format: "%.1f", score.total)
+        return score.total.formatted(.number.precision(.fractionLength(1)))
     }
 }
 

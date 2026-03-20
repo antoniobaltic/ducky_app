@@ -71,6 +71,12 @@ final class WeatherService {
     @ObservationIgnored
     var isPreviewStubbed = false
 
+    #if DEBUG
+    /// When true, injects perfect summer weather for all lakes (for App Store screenshots)
+    @ObservationIgnored
+    var isScreenshotMode = false
+    #endif
+
     private var saveCacheTask: Task<Void, Never>?
     private var hydrationTask: Task<Void, Never>?
     private var inFlightFetches: [String: Task<LakeWeather?, Never>] = [:]
@@ -116,6 +122,14 @@ final class WeatherService {
             isUsingStaleCache = false
             return
         }
+
+        #if DEBUG
+        if isScreenshotMode {
+            let unique = uniqueLakes(lakes)
+            injectScreenshotWeather(for: unique)
+            return
+        }
+        #endif
 
         let unique = uniqueLakes(lakes)
         guard !unique.isEmpty else {
@@ -197,6 +211,72 @@ final class WeatherService {
     func prefetchWeather(for lakes: [BathingWater]) async {
         await runHydration(for: uniqueLakes(lakes), forceRefresh: false, showProgress: false)
     }
+
+    #if DEBUG
+    /// Inject varied summer weather for all lakes (for App Store screenshots).
+    /// Distribution: ~30% perfekt, ~35% gut, ~25% mittel, ~10% schlecht
+    func injectScreenshotWeather(for lakes: [BathingWater]) {
+        let variations: [(temp: Double, feelsLike: Double, wind: Double, precip: Int, code: Int, symbol: String, desc: String, uv: Int)] = [
+            // Perfekt (8-10) — hot, sunny, calm
+            (31, 32, 3,  0,  0, "sun.max.fill",             "Strahlend sonnig", 8),
+            (29, 30, 5,  0,  0, "sun.max.fill",             "Sonnig",           7),
+            (28, 29, 4,  0,  1, "sun.max.fill",             "Überwiegend sonnig", 7),
+            (30, 31, 6,  5,  0, "sun.max.fill",             "Sonnig",           8),
+            // Gut (6-8) — warm but some clouds or wind
+            (25, 25, 12, 10, 2, "cloud.sun.fill",           "Leicht bewölkt",   5),
+            (24, 23, 8,  15, 2, "cloud.sun.fill",           "Teilweise bewölkt", 5),
+            (26, 26, 15, 5,  2, "cloud.sun.fill",           "Leicht bewölkt",   6),
+            (23, 22, 6,  10, 1, "sun.min.fill",             "Heiter",           4),
+            (27, 27, 18, 10, 2, "cloud.sun.fill",           "Leicht bewölkt",   5),
+            // Mittel (4-6) — cooler or cloudier
+            (21, 20, 14, 30, 3, "cloud.fill",               "Bewölkt",          3),
+            (20, 18, 20, 25, 3, "cloud.fill",               "Bewölkt",          2),
+            (22, 21, 12, 35, 2, "cloud.sun.fill",           "Wechselhaft",      3),
+            (19, 18, 10, 20, 3, "cloud.fill",               "Überwiegend bewölkt", 2),
+            // Schlecht (2-4) — cool, rainy, windy
+            (17, 15, 22, 60, 61, "cloud.rain.fill",         "Leichter Regen",   1),
+            (16, 14, 25, 70, 63, "cloud.rain.fill",         "Regnerisch",       1),
+        ]
+
+        // Seeded RNG for deterministic but varied distribution
+        var rng = SeededRandomNumberGenerator(seed: 42)
+
+        for lake in lakes {
+            let v = variations[Int.random(in: 0..<variations.count, using: &rng)]
+            let weather = LakeWeather(
+                airTemperature: v.temp + Double.random(in: -1.0...1.0, using: &rng),
+                uvIndex: v.uv,
+                conditionSymbol: v.symbol,
+                conditionDescription: v.desc,
+                feelsLike: v.feelsLike + Double.random(in: -1.0...1.0, using: &rng),
+                windSpeed: v.wind + Double.random(in: -2.0...2.0, using: &rng),
+                precipitationProbability: v.precip,
+                weatherCode: v.code,
+                forecast: []
+            )
+            weatherCache[lake.id] = weather
+        }
+        cacheTimestamp = Date()
+        hydrationTotal = lakes.count
+        hydrationCompleted = lakes.count
+        isHydratingAll = false
+        isUsingStaleCache = false
+        cacheRevision &+= 1
+    }
+
+    /// Simple seeded RNG for deterministic screenshot data
+    private struct SeededRandomNumberGenerator: RandomNumberGenerator {
+        private var state: UInt64
+        init(seed: UInt64) { state = seed }
+        mutating func next() -> UInt64 {
+            state &+= 0x9e3779b97f4a7c15
+            var z = state
+            z = (z ^ (z >> 30)) &* 0xbf58476d1ce4e5b9
+            z = (z ^ (z >> 27)) &* 0x94d049bb133111eb
+            return z ^ (z >> 31)
+        }
+    }
+    #endif
 
     func clearCache() {
         saveCacheTask?.cancel()
@@ -530,24 +610,24 @@ final class WeatherService {
     private static func descriptionForWMOCode(_ code: Int) -> String {
         switch code {
         case 0:           return "Klar"
-        case 1:           return "Überwiegend klar"
-        case 2:           return "Teilweise bewölkt"
+        case 1:           return "Meist klar"
+        case 2:           return "Teils bewölkt"
         case 3:           return "Bewölkt"
         case 45, 48:      return "Nebel"
         case 51, 53, 55:  return "Nieselregen"
-        case 56, 57:      return "Gefrierender Nieselregen"
+        case 56, 57:      return "Gefr. Nieselregen"
         case 61:          return "Leichter Regen"
         case 63:          return "Regen"
         case 65:          return "Starker Regen"
-        case 66, 67:      return "Gefrierender Regen"
-        case 71:          return "Leichter Schneefall"
+        case 66, 67:      return "Gefr. Regen"
+        case 71:          return "Leichter Schnee"
         case 73:          return "Schneefall"
-        case 75:          return "Starker Schneefall"
+        case 75:          return "Starker Schnee"
         case 77:          return "Schneegriesel"
-        case 80, 81, 82:  return "Regenschauer"
+        case 80, 81, 82:  return "Schauer"
         case 85, 86:      return "Schneeschauer"
         case 95:          return "Gewitter"
-        case 96, 99:      return "Gewitter mit Hagel"
+        case 96, 99:      return "Hagelgewitter"
         default:          return "Unbekannt"
         }
     }

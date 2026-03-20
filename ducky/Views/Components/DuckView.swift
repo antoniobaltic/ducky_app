@@ -14,6 +14,7 @@ struct DuckView: View {
     @State private var bodyTilt: Double = 0
     @State private var beakGap: CGFloat = 0
     @State private var decorFloat: CGFloat = 0
+    @State private var eyebrowBounce: CGFloat = 0
     @State private var entryScale: CGFloat = 0.6
     @State private var blinkTask: Task<Void, Never>?
 
@@ -81,11 +82,24 @@ struct DuckView: View {
                 .offset(x: -5 * s, y: 24 * s + bobOffset)
                 .blur(radius: 3 * s)
 
-            // Wing
+            // Tucked wing (left side, behind body)
             if !isCompact {
-                wing
-                    .offset(x: 20 * s, y: 24 * s + bobOffset)
-                    .rotationEffect(.degrees(wingAngle), anchor: .leading)
+                tuckedWing
+                    .offset(x: -22 * s, y: 22 * s + bobOffset)
+            }
+
+            // Waving wing (right side) — columbo: raised "one more thing" flipper
+            if !isCompact {
+                if state == .columbo {
+                    // Raised pointing flipper
+                    wing
+                        .offset(x: 24 * s, y: 2 * s + bobOffset)
+                        .rotationEffect(.degrees(wingAngle), anchor: .bottom)
+                } else {
+                    wing
+                        .offset(x: 20 * s, y: 24 * s + bobOffset)
+                        .rotationEffect(.degrees(wingAngle), anchor: .leading)
+                }
             }
 
             // Tail
@@ -119,9 +133,11 @@ struct DuckView: View {
                 sunglasses.offset(x: 6 * s, y: -20 * s + bobOffset)
             }
 
-            // Hair tuft
-            if !isCompact {
-                hairTuft.offset(x: -2 * s, y: -42 * s + bobOffset)
+            // Columbo detective accessories
+            if state == .columbo && !isCompact {
+                columboTrenchcoat.offset(y: bobOffset)
+                columboFedora.offset(x: 2 * s, y: -44 * s + bobOffset)
+                columboPipe.offset(x: 44 * s, y: -8 * s + bobOffset)
             }
 
             // State decorations
@@ -147,6 +163,10 @@ struct DuckView: View {
                     endRadiusFraction: 0.7
                 )
             )
+            .overlay(
+                Ellipse()
+                    .stroke(Color(red: 0.85, green: 0.65, blue: 0.10).opacity(0.45), lineWidth: 1.2 * s)
+            )
             .frame(width: 64 * s, height: 46 * s)
             .shadow(color: state.bodyColor.opacity(0.15), radius: 3 * s, y: 2 * s)
     }
@@ -163,6 +183,10 @@ struct DuckView: View {
                     endRadius: 28 * s
                 )
             )
+            .overlay(
+                Circle()
+                    .stroke(Color(red: 0.85, green: 0.65, blue: 0.10).opacity(0.40), lineWidth: 1.2 * s)
+            )
             .frame(width: 54 * s, height: 54 * s)
             .shadow(color: state.bodyColor.opacity(0.12), radius: 3 * s, y: 1 * s)
     }
@@ -177,7 +201,7 @@ struct DuckView: View {
     }
 
     private var eyeSpacing: CGFloat {
-        (state == .begeistert ? 8 : 6) * s
+        (state == .begeistert ? 8 : state == .columbo ? 7 : 6) * s
     }
 
     private func singleEye(isLeft: Bool) -> some View {
@@ -229,7 +253,7 @@ struct DuckView: View {
             // Eyebrows
             if shouldShowEyebrow {
                 eyebrow(isLeft: isLeft)
-                    .offset(y: -(eyeHeight * 0.55 + 2 * s))
+                    .offset(y: -(eyeHeight * 0.55 + (state == .begeistert ? 6 : 2) * s) + eyebrowBounce)
             }
         }
     }
@@ -241,6 +265,7 @@ struct DuckView: View {
         case .zoegernd:   return 13 * s
         case .frierend:   return 13 * s
         case .warnend:    return 15 * s
+        case .columbo:    return 14 * s
         }
     }
 
@@ -251,6 +276,7 @@ struct DuckView: View {
         case .zoegernd:   return 13 * s
         case .frierend:   return 11 * s
         case .warnend:    return 16 * s
+        case .columbo:    return 13 * s
         }
     }
 
@@ -261,12 +287,14 @@ struct DuckView: View {
         case .zoegernd:   return 5 * s
         case .frierend:   return 4.5 * s
         case .warnend:    return 3.5 * s
+        case .columbo:    return 5.5 * s
         }
     }
 
     private func pupilOffsetX(isLeft: Bool) -> CGFloat {
         switch state {
         case .zoegernd: return 2.5 * s   // side-eye
+        case .columbo:  return 2 * s     // slight side-glance
         default:        return (isLeft ? 0.5 : 1) * s
         }
     }
@@ -281,14 +309,30 @@ struct DuckView: View {
     private var glintSize: CGFloat { 2.8 * s }
 
     private var shouldShowEyebrow: Bool {
-        state == .zoegernd || state == .warnend || state == .frierend
+        true // All states show eyebrows
     }
 
+    @ViewBuilder
     private func eyebrow(isLeft: Bool) -> some View {
-        Capsule()
-            .fill(Color(white: 0.25).opacity(eyebrowOpacity))
-            .frame(width: eyeWidth * 0.75, height: 2 * s)
-            .rotationEffect(.degrees(eyebrowAngle(isLeft: isLeft)))
+        if state == .begeistert || state == .zufrieden {
+            // Happy curved arc ⌒ using trimmed Circle
+            Circle()
+                .trim(from: 0.0, to: 0.5)
+                .rotation(.degrees(180))
+                .stroke(Color(white: 0.25).opacity(0.45), lineWidth: 2.2 * s)
+                .frame(width: eyeWidth * 0.8, height: eyeWidth * 0.35)
+        } else if state == .columbo {
+            // Asymmetric detective brows — one raised (suspicious), one relaxed
+            Capsule()
+                .fill(Color(white: 0.25).opacity(0.55))
+                .frame(width: eyeWidth * 0.75, height: 2.2 * s)
+                .rotationEffect(.degrees(isLeft ? -8 : 18))
+        } else {
+            Capsule()
+                .fill(Color(white: 0.25).opacity(eyebrowOpacity))
+                .frame(width: eyeWidth * 0.75, height: 2 * s)
+                .rotationEffect(.degrees(eyebrowAngle(isLeft: isLeft)))
+        }
     }
 
     private var eyebrowOpacity: Double {
@@ -327,38 +371,38 @@ struct DuckView: View {
             Ellipse()
                 .fill(
                     LinearGradient(
-                        colors: [Color(white: 0.08), Color(white: 0.22)],
+                        colors: [Color(white: 0.02), Color(white: 0.12)],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 19 * s, height: 13 * s)
-                .overlay(Ellipse().stroke(Color(white: 0.44), lineWidth: 1.5 * s))
+                .frame(width: 21 * s, height: 16 * s)
+                .overlay(Ellipse().stroke(Color(white: 0.30), lineWidth: 2.0 * s))
                 .offset(x: -12 * s)
 
             // Left lens glint
             Ellipse()
-                .fill(.white.opacity(0.26))
+                .fill(.white.opacity(0.35))
                 .frame(width: 6 * s, height: 3 * s)
-                .offset(x: -16 * s, y: -2.5 * s)
+                .offset(x: -16 * s, y: -3 * s)
                 .blur(radius: 0.8 * s)
 
             // Right lens
             Ellipse()
                 .fill(
                     LinearGradient(
-                        colors: [Color(white: 0.08), Color(white: 0.22)],
+                        colors: [Color(white: 0.02), Color(white: 0.12)],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 19 * s, height: 13 * s)
-                .overlay(Ellipse().stroke(Color(white: 0.44), lineWidth: 1.5 * s))
+                .frame(width: 21 * s, height: 16 * s)
+                .overlay(Ellipse().stroke(Color(white: 0.30), lineWidth: 2.0 * s))
                 .offset(x: 12 * s)
 
             // Right lens glint
             Ellipse()
-                .fill(.white.opacity(0.26))
+                .fill(.white.opacity(0.35))
                 .frame(width: 6 * s, height: 3 * s)
-                .offset(x: 8 * s, y: -2.5 * s)
+                .offset(x: 8 * s, y: -3 * s)
                 .blur(radius: 0.8 * s)
 
             // Bridge
@@ -380,12 +424,20 @@ struct DuckView: View {
                         startPoint: .top, endPoint: .bottom
                     )
                 )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7 * s)
+                        .stroke(Color(red: 0.85, green: 0.40, blue: 0.05).opacity(0.40), lineWidth: 1.0 * s)
+                )
                 .frame(width: 21 * s, height: 11 * s)
                 .offset(y: -2 * s)
 
             // Lower beak
             RoundedRectangle(cornerRadius: 5 * s)
                 .fill(state.billColor.opacity(0.75))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 5 * s)
+                        .stroke(Color(red: 0.85, green: 0.40, blue: 0.05).opacity(0.30), lineWidth: 0.8 * s)
+                )
                 .frame(width: 18 * s, height: 8 * s)
                 .offset(y: 5 * s + beakGap)
 
@@ -430,6 +482,7 @@ struct DuckView: View {
         case .begeistert: return 4 * s
         case .warnend:    return 5 * s
         case .zoegernd:   return 1.5 * s
+        case .columbo:    return 2 * s   // mid-sentence
         default:          return 0
         }
     }
@@ -461,21 +514,44 @@ struct DuckView: View {
         case .zoegernd:   return .clear
         case .frierend:   return Color(red: 0.55, green: 0.82, blue: 0.38)
         case .warnend:    return Color(red: 1.0, green: 0.4, blue: 0.3)
+        case .columbo:    return .pink
         }
     }
 
-    // MARK: - Wing
+    // MARK: - Wing (waving, right side)
 
     private var wing: some View {
         Ellipse()
             .fill(
                 LinearGradient(
-                    colors: [state.bodyColor.opacity(0.55), state.bodyColor.opacity(0.3)],
+                    colors: [state.bodyColor.opacity(0.75), state.bodyColor.opacity(0.50)],
                     startPoint: .top, endPoint: .bottom
                 )
             )
+            .overlay(
+                Ellipse()
+                    .stroke(Color(red: 0.85, green: 0.65, blue: 0.10).opacity(0.50), lineWidth: 1.0 * s)
+            )
             .frame(width: 22 * s, height: 14 * s)
             .rotationEffect(.degrees(15))
+    }
+
+    // MARK: - Tucked Wing (left side, against body)
+
+    private var tuckedWing: some View {
+        Ellipse()
+            .fill(
+                LinearGradient(
+                    colors: [state.bodyColor.opacity(0.65), state.bodyColor.opacity(0.40)],
+                    startPoint: .top, endPoint: .bottom
+                )
+            )
+            .overlay(
+                Ellipse()
+                    .stroke(Color(red: 0.85, green: 0.65, blue: 0.10).opacity(0.40), lineWidth: 0.8 * s)
+            )
+            .frame(width: 18 * s, height: 12 * s)
+            .rotationEffect(.degrees(-10))
     }
 
     // MARK: - Tail
@@ -485,6 +561,10 @@ struct DuckView: View {
             ForEach(0..<3, id: \.self) { i in
                 Capsule()
                     .fill(state.bodyColor.opacity(0.5 - Double(i) * 0.08))
+                    .overlay(
+                        Capsule()
+                            .stroke(Color(red: 0.85, green: 0.65, blue: 0.10).opacity(0.35), lineWidth: 0.7 * s)
+                    )
                     .frame(width: (9 - CGFloat(i)) * s, height: (3.5 + CGFloat(i) * 0.5) * s)
                     .rotationEffect(.degrees(Double(i - 1) * -18))
                     .offset(x: -CGFloat(i) * 2 * s, y: CGFloat(1 - i) * 3 * s)
@@ -498,11 +578,132 @@ struct DuckView: View {
         ZStack {
             ForEach(0..<3, id: \.self) { i in
                 Capsule()
-                    .fill(state.bodyColor.opacity(0.7))
+                    .fill(Color(white: 0.15).opacity(0.7))
                     .frame(width: 3 * s, height: (9 + CGFloat(i) * 2.5) * s)
                     .rotationEffect(.degrees(Double(i - 1) * 22))
                     .offset(x: CGFloat(i - 1) * 3.5 * s, y: CGFloat(2 - i) * 1.5 * s)
             }
+        }
+    }
+
+    // MARK: - Columbo Accessories
+
+    private var columboFedora: some View {
+        ZStack {
+            // Crown
+            RoundedRectangle(cornerRadius: 6 * s, style: .continuous)
+                .fill(Color(white: 0.28))
+                .frame(width: 32 * s, height: 18 * s)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6 * s, style: .continuous)
+                        .stroke(Color(white: 0.18).opacity(0.5), lineWidth: 0.8 * s)
+                )
+
+            // Crown dent (darker shadow at top)
+            Ellipse()
+                .fill(Color(white: 0.18).opacity(0.35))
+                .frame(width: 16 * s, height: 4 * s)
+                .offset(y: -6 * s)
+
+            // Hat band
+            Capsule()
+                .fill(Color(red: 0.55, green: 0.35, blue: 0.18))
+                .frame(width: 30 * s, height: 3.5 * s)
+                .offset(y: 5 * s)
+
+            // Brim
+            Ellipse()
+                .fill(Color(white: 0.22))
+                .frame(width: 50 * s, height: 10 * s)
+                .overlay(
+                    Ellipse()
+                        .stroke(Color(white: 0.15).opacity(0.4), lineWidth: 0.8 * s)
+                )
+                .offset(y: 10 * s)
+
+            // Brim shine
+            Ellipse()
+                .fill(.white.opacity(0.08))
+                .frame(width: 30 * s, height: 5 * s)
+                .offset(x: -6 * s, y: 9 * s)
+        }
+    }
+
+    private var columboTrenchcoat: some View {
+        // Subtle collar hints — just two small triangular lapel tips peeking out
+        ZStack {
+            // Left lapel tip
+            Path { p in
+                p.move(to: CGPoint(x: 0, y: 0))
+                p.addLine(to: CGPoint(x: -8 * s, y: -2 * s))
+                p.addLine(to: CGPoint(x: -3 * s, y: -10 * s))
+                p.closeSubpath()
+            }
+            .fill(Color(red: 0.68, green: 0.60, blue: 0.45).opacity(0.7))
+            .offset(x: -6 * s, y: 2 * s)
+
+            // Right lapel tip
+            Path { p in
+                p.move(to: CGPoint(x: 0, y: 0))
+                p.addLine(to: CGPoint(x: 8 * s, y: -2 * s))
+                p.addLine(to: CGPoint(x: 3 * s, y: -10 * s))
+                p.closeSubpath()
+            }
+            .fill(Color(red: 0.68, green: 0.60, blue: 0.45).opacity(0.7))
+            .offset(x: 10 * s, y: 2 * s)
+        }
+    }
+
+    private var columboPipe: some View {
+        ZStack {
+            // Stem — extends from beak outward to the right
+            Capsule()
+                .fill(Color(red: 0.45, green: 0.30, blue: 0.15))
+                .frame(width: 16 * s, height: 2.5 * s)
+                .rotationEffect(.degrees(10))
+                .offset(x: 2 * s, y: 2 * s)
+
+            // Bowl — at the end of the stem, pointing up
+            RoundedRectangle(cornerRadius: 2 * s, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 0.50, green: 0.32, blue: 0.18), Color(red: 0.38, green: 0.24, blue: 0.12)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .frame(width: 6 * s, height: 9 * s)
+                .offset(x: 10 * s, y: -3 * s)
+
+            // Bowl rim
+            Capsule()
+                .fill(Color(red: 0.55, green: 0.35, blue: 0.20))
+                .frame(width: 8 * s, height: 2.5 * s)
+                .offset(x: 10 * s, y: -7.5 * s)
+
+            // Smoke wisps — rising from bowl
+            Circle()
+                .fill(Color(white: 0.75).opacity(0.7))
+                .frame(width: 7 * s, height: 7 * s)
+                .offset(x: 10 * s, y: -12 * s + decorFloat * 0.5)
+                .blur(radius: 1.5 * s)
+
+            Circle()
+                .fill(Color(white: 0.78).opacity(0.55))
+                .frame(width: 6 * s, height: 6 * s)
+                .offset(x: 13 * s, y: -18 * s + decorFloat)
+                .blur(radius: 2 * s)
+
+            Circle()
+                .fill(Color(white: 0.80).opacity(0.4))
+                .frame(width: 5.5 * s, height: 5.5 * s)
+                .offset(x: 8 * s, y: -24 * s + decorFloat * 1.4)
+                .blur(radius: 2.5 * s)
+
+            Circle()
+                .fill(Color(white: 0.82).opacity(0.3))
+                .frame(width: 5 * s, height: 5 * s)
+                .offset(x: 14 * s, y: -30 * s + decorFloat * 1.8)
+                .blur(radius: 3 * s)
         }
     }
 
@@ -573,6 +774,23 @@ struct DuckView: View {
                     .offset(x: -30 * s, y: -38 * s + bobOffset)
                     .opacity(sparkleOpacity)
             }
+
+        case .columbo:
+            Group {
+                // Magnifying glass
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11 * s, weight: .bold))
+                    .foregroundStyle(Color(red: 0.55, green: 0.45, blue: 0.35).opacity(0.6))
+                    .opacity(sparkleOpacity * 0.8)
+                    .offset(x: -36 * s, y: -34 * s + bobOffset + decorFloat)
+
+                // Ellipsis dots "..."
+                Text("...")
+                    .font(.system(size: 16 * s, weight: .black, design: .rounded))
+                    .foregroundStyle(Color(white: 0.4).opacity(0.5))
+                    .opacity(sparkleOpacity)
+                    .offset(x: 38 * s, y: -50 * s + bobOffset + decorFloat * 0.8)
+            }
         }
     }
 
@@ -588,15 +806,15 @@ struct DuckView: View {
 
     private func startAnimations() {
         // Bob
-        let bobAmount: CGFloat = state == .begeistert ? -7 : state == .frierend ? -2.5 : -3
-        let bobDuration: Double = state == .begeistert ? 0.5 : state == .frierend ? 2.0 : 2.2
+        let bobAmount: CGFloat = state == .begeistert ? -7 : state == .frierend ? -2.5 : state == .columbo ? -3 : -3
+        let bobDuration: Double = state == .begeistert ? 0.5 : state == .frierend ? 2.0 : state == .columbo ? 2.8 : 2.2
         withAnimation(.easeInOut(duration: bobDuration).repeatForever(autoreverses: true)) {
             bobOffset = bobAmount * s
         }
 
         // Wing flap
-        let wingTarget: Double = state == .begeistert ? -32 : state == .warnend ? -8 : -4
-        let wingSpeed: Double = state == .begeistert ? 0.3 : state == .warnend ? 0.8 : 2.5
+        let wingTarget: Double = state == .begeistert ? -32 : state == .warnend ? -8 : state == .columbo ? -65 : -4
+        let wingSpeed: Double = state == .begeistert ? 0.3 : state == .warnend ? 0.8 : state == .columbo ? 0.4 : 2.5
         withAnimation(.easeInOut(duration: wingSpeed).repeatForever(autoreverses: true)) {
             wingAngle = wingTarget
         }
@@ -609,6 +827,7 @@ struct DuckView: View {
             case .zoegernd:   return (-4, 2.5)
             case .frierend:   return (1.5, 2.5)
             case .warnend:    return (4, 0.6)
+            case .columbo:    return (5, 3.0)
             }
         }()
         withAnimation(.easeInOut(duration: tiltDuration).repeatForever(autoreverses: true)) {
@@ -625,6 +844,7 @@ struct DuckView: View {
             case .zufrieden:  return (0.25, 2)
             case .frierend:   return (0.2, 1.8)
             case .warnend:    return (0.35, 0.8)
+            case .columbo:    return (0.15, 2.5)
             default:          return (0, 1)
             }
         }()
@@ -639,6 +859,15 @@ struct DuckView: View {
             withAnimation(.easeInOut(duration: sparkleDuration).repeatForever(autoreverses: true)) {
                 sparkleOpacity = sparkleTarget
             }
+        }
+
+        // Eyebrow bounce (begeistert only — slightly different timing than main bob for liveliness)
+        if state == .begeistert {
+            withAnimation(.easeInOut(duration: 0.45).repeatForever(autoreverses: true)) {
+                eyebrowBounce = -3 * s
+            }
+        } else {
+            eyebrowBounce = 0
         }
 
         // Decoration float
@@ -677,87 +906,6 @@ struct DuckView: View {
     }
 }
 
-// MARK: - Map Pin (mini duck face, not emoji)
-
-struct DuckPinView: View {
-    let state: DuckState
-
-    var body: some View {
-        ZStack {
-            // Outer glow
-            Circle()
-                .fill(state.bodyColor.opacity(0.2))
-                .frame(width: 38, height: 38)
-
-            // Head circle
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [state.bodyColor, state.bodyColor.opacity(0.85)],
-                        center: .init(x: 0.4, y: 0.35),
-                        startRadius: 0,
-                        endRadius: 15
-                    )
-                )
-                .frame(width: 30, height: 30)
-                .shadow(color: state.bodyColor.opacity(0.3), radius: 4, y: 2)
-
-            // Head shine
-            Circle()
-                .fill(.white.opacity(0.22))
-                .frame(width: 10, height: 8)
-                .offset(x: -4, y: -6)
-                .blur(radius: 2)
-
-            // Eyes
-            HStack(spacing: 4) {
-                pinEye
-                pinEye
-            }
-            .offset(x: 1, y: -2)
-
-            // Beak
-            Ellipse()
-                .fill(state.billColor)
-                .frame(width: 9, height: 6)
-                .offset(x: 5, y: 4)
-
-            // Tiny cheek
-            Circle()
-                .fill(Color.pink.opacity(state == .begeistert || state == .zufrieden ? 0.3 : 0))
-                .frame(width: 5, height: 5)
-                .offset(x: 8, y: 1)
-                .blur(radius: 2)
-        }
-    }
-
-    private var pinEye: some View {
-        ZStack {
-            Circle()
-                .fill(.white)
-                .frame(width: 6, height: 6)
-            Circle()
-                .fill(Color(white: 0.1))
-                .frame(width: 3.5, height: 3.5)
-            Circle()
-                .fill(.white)
-                .frame(width: 1.5, height: 1.5)
-                .offset(x: 0.5, y: -0.8)
-        }
-    }
-}
-
-// MARK: - Small Badge
-
-struct DuckBadge: View {
-    let state: DuckState
-    var size: CGFloat = 40
-
-    var body: some View {
-        DuckView(state: state, size: size)
-    }
-}
-
 // MARK: - Preview
 
 #Preview("Ducky States") {
@@ -788,15 +936,6 @@ struct DuckBadge: View {
         DuckView(state: .zufrieden, size: 48)
         DuckView(state: .zoegernd, size: 80)
         DuckView(state: .frierend, size: 120)
-    }
-    .padding()
-}
-
-#Preview("Duck Pin") {
-    HStack(spacing: 16) {
-        ForEach(DuckState.allCases, id: \.rawValue) { state in
-            DuckPinView(state: state)
-        }
     }
     .padding()
 }

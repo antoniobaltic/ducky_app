@@ -15,27 +15,191 @@ struct TipJarSheet: View {
     private var isPrompt: Bool { entryPoint == .prompt }
 
     var body: some View {
+        if isPrompt {
+            promptView
+        } else {
+            settingsView
+        }
+    }
+
+    // MARK: - Prompt View (Columbo-style)
+
+    @State private var duckBob = false
+    @State private var settingsTipNotice: String?
+
+    private var promptView: some View {
         NavigationStack {
             ZStack {
-                AppTheme.pageBackground.ignoresSafeArea()
+                WelcomeSceneView()
+                    .ignoresSafeArea()
+
+                GeometryReader { proxy in
+                    ScrollView(.vertical) {
+                        VStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(AppTheme.skyBlue.opacity(0.15))
+                                    .frame(width: 155, height: 155)
+
+                                Circle()
+                                    .stroke(AppTheme.skyBlue.opacity(0.25), lineWidth: 1.5)
+                                    .frame(width: 185, height: 185)
+
+                                FloatingBubblesView(count: 8, color: AppTheme.skyBlue.opacity(0.35))
+                                    .frame(width: 200, height: 175)
+                                    .allowsHitTesting(false)
+
+                                DuckView(state: .columbo, size: 120)
+                                    .offset(y: duckBob ? -4 : 4)
+                                    .animation(
+                                        .easeInOut(duration: 2.0).repeatForever(autoreverses: true),
+                                        value: duckBob
+                                    )
+                            }
+                            .frame(height: 185)
+
+                            VStack(spacing: 6) {
+                                Text("Unterstütze die App")
+                                    .font(.system(size: 28, weight: .heavy, design: .rounded))
+                                    .foregroundStyle(AppTheme.textPrimary)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.88)
+
+                                Text("Unterstütze Ducky (und seinen Indie-Entwickler) mit einer kleinen Brotspende.")
+                                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(3)
+                                    .minimumScaleFactor(0.9)
+
+                                Text("Jeder Krümel hilft!")
+                                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                                    .foregroundStyle(AppTheme.textSecondary)
+                                    .multilineTextAlignment(.center)
+                            }
+
+                            promptTipOptions
+
+                            // Dismiss button
+                            Button {
+                                tipJarService.snoozePrompt()
+                                dismiss()
+                            } label: {
+                                Text("Nicht jetzt, Ducky...")
+                                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(AppTheme.oceanBlue, in: RoundedRectangle(cornerRadius: AppTheme.buttonRadius, style: .continuous))
+                            }
+                            .padding(.top, 4)
+
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 6)
+                        .padding(.bottom, 8)
+                        .frame(minHeight: proxy.size.height - 6, alignment: .center)
+                    }
+                    .scrollIndicators(.hidden)
+                }
+            }
+            .navigationBarHidden(true)
+            .onAppear { duckBob = true }
+            .task {
+                tipJarService.configureIfNeeded()
+                await tipJarService.loadProductsIfNeeded()
+            }
+        }
+    }
+
+    private var promptTipOptions: some View {
+        HStack(spacing: 10) {
+            if tipJarService.products.isEmpty {
+                ForEach(TipJarService.tipCatalog) { def in
+                    promptFallbackTip(def: def)
+                }
+            } else {
+                ForEach(tipJarService.products, id: \.id) { product in
+                    promptTipButton(product: product)
+                }
+            }
+        }
+    }
+
+    private func promptTipButton(product: Product) -> some View {
+        let isPurchasing = tipJarService.purchaseInFlightProductID == product.id
+        return Button {
+            guard !isPurchasing else { return }
+            Task {
+                let outcome = await tipJarService.purchase(product)
+                if outcome == .success {
+                    Haptics.success()
+                    dismiss()
+                }
+            }
+        } label: {
+            VStack(spacing: 6) {
+                if isPurchasing {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(height: 20)
+                } else {
+                    Text(product.displayName)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
+                Text(product.displayPrice)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AppTheme.oceanBlue)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
+            .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
+        }
+        .buttonStyle(.plain)
+        .disabled(tipJarService.purchaseInFlightProductID != nil)
+    }
+
+    private func promptFallbackTip(def: TipJarService.TipProductDefinition) -> some View {
+        VStack(spacing: 6) {
+            Text(def.suggestedDisplayName)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.textPrimary)
+            Text("—")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
+    }
+
+    // MARK: - Settings View (full detail)
+
+    private var settingsView: some View {
+        NavigationStack {
+            ZStack {
+                AppTheme.favouritesGradient.ignoresSafeArea()
+
+                SettingsBubblesView(color: AppTheme.warmPink)
+                    .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 14) {
                         headerCard
                         productListCard
                         supportStatusCard
-
-                        if isPrompt {
-                            promptControlsCard
-                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
                     .padding(.bottom, 28)
                 }
             }
-            .navigationTitle("Ducky unterstützen")
-            .iOSNavigationBarStyle()
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .iOSTopBarTrailing) {
                     Button("Fertig") { dismiss() }
@@ -57,11 +221,11 @@ struct TipJarSheet: View {
                 .background(AppTheme.oceanBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(isPrompt ? "Ducky hat Brothunger!" : "Ducky-Brotkasse")
+                Text("Ducky-Brotkassa")
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundStyle(AppTheme.textPrimary)
 
-                Text("Wenn dir Ducky taugt, kannst ihm freiwillig a bissl Brot spendieren. Jede Semmel freut den Schnabel.")
+                Text("Unterstütze Ducky (und seinen Indie-Entwickler) mit einer kleinen Brotspende. Jeder Krümel hilft!")
                     .font(.system(size: 14, weight: .regular, design: .rounded))
                     .foregroundStyle(AppTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -159,7 +323,7 @@ struct TipJarSheet: View {
                 color: AppTheme.teal
             )
 
-            if let notice = tipJarService.purchaseNotice {
+            if let notice = settingsTipNotice {
                 Divider()
                 Text(notice)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
@@ -179,38 +343,6 @@ struct TipJarSheet: View {
         .appCard()
     }
 
-    private var promptControlsCard: some View {
-        VStack(spacing: 10) {
-            Button {
-                tipJarService.snoozePrompt()
-                dismiss()
-            } label: {
-                Text("Später erinnern")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppTheme.oceanBlue)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background(AppTheme.oceanBlue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                tipJarService.setPromptsEnabled(false)
-                dismiss()
-            } label: {
-                Text("Nicht mehr erinnern")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background(AppTheme.cardStroke.opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .buttonStyle(.plain)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .appCard()
-    }
-
     private func tipProductButton(_ product: Product) -> some View {
         let isActivePurchase = tipJarService.purchaseInFlightProductID == product.id
         return Button {
@@ -219,6 +351,7 @@ struct TipJarSheet: View {
                 let outcome = await tipJarService.purchase(product)
                 if outcome == .success {
                     Haptics.success()
+                    settingsTipNotice = tipJarService.purchaseNotice
                 }
             }
         } label: {
@@ -295,7 +428,12 @@ struct TipJarSheet: View {
     }()
 }
 
-#Preview {
+#Preview("From Settings") {
     TipJarSheet(entryPoint: .settings)
+        .environment(TipJarService.shared)
+}
+
+#Preview("Prompt") {
+    TipJarSheet(entryPoint: .prompt)
         .environment(TipJarService.shared)
 }

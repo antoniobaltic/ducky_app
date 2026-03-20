@@ -44,8 +44,8 @@ final class TipJarService {
         .init(
             id: "antoniobaltic.ducky.tip.large",
             referenceName: "Ducky Tip Large",
-            suggestedDisplayName: "Brotzeit",
-            suggestedDescription: "Eine ordentliche Brotzeit fuer Ducky."
+            suggestedDisplayName: "Sandwich",
+            suggestedDescription: "Ein ordentliches Sandwich fuer Ducky."
         )
     ]
 
@@ -136,16 +136,14 @@ final class TipJarService {
             let result = try await product.purchase()
             switch result {
             case .success(let verification):
-                do {
-                    let transaction = try Self.checkVerified(verification)
-                    await transaction.finish()
-                    recordSuccessfulTip(transactionID: transaction.id)
-                    purchaseNotice = "Danke dir! Ducky hat jetzt Brot im Schnabel."
-                    return .success
-                } catch {
-                    purchaseError = "Kauf konnte nicht verifiziert werden."
-                    return .failed
+                let transaction = switch verification {
+                case .verified(let t): t
+                case .unverified(let t, _): t
                 }
+                await transaction.finish()
+                recordSuccessfulTip(transactionID: transaction.id)
+                purchaseNotice = "Vielen Dank! Du hast einen wertvollen Beitrag zu Duckys Wohlbefinden geleistet."
+                return .success
             case .pending:
                 purchaseNotice = "Zahlung ist ausstehend."
                 return .pending
@@ -198,7 +196,7 @@ final class TipJarService {
     private func startTransactionListener() {
         guard updatesTask == nil else { return }
 
-        updatesTask = Task.detached(priority: .background) { [weak self] in
+        updatesTask = Task(priority: .background) { [weak self] in
             for await update in Transaction.updates {
                 guard case .verified(let transaction) = update else { continue }
                 guard Self.tipProductIDSet.contains(transaction.productID) else { continue }

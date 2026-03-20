@@ -8,8 +8,8 @@ struct HomeView: View {
     @Environment(WeatherService.self) private var weatherService
     @Environment(\.modelContext) private var modelContext
     @Query var favourites: [FavouriteItem]
+    @Query var allVisits: [LakeVisit]
     @State private var selectedLake: BathingWater?
-    @State private var quickActionLake: BathingWater?
     @State private var shareLake: BathingWater?
     @State private var searchText = ""
     @State private var selectedState: String?
@@ -44,73 +44,6 @@ struct HomeView: View {
         var id: String { lake.id }
     }
 
-    // MARK: - Sort / Filter Enums
-
-    enum SortOption: String, CaseIterable {
-        case bestScore, nearest, alphabetical, airTemperature, waterTemperature
-
-        static let displayOrder: [SortOption] = [
-            .bestScore,
-            .nearest,
-            .alphabetical,
-            .airTemperature,
-            .waterTemperature
-        ]
-
-        var label: String {
-            switch self {
-            case .bestScore:    return "Bester Score"
-            case .nearest:      return "Entfernung"
-            case .alphabetical: return "A–Z"
-            case .airTemperature: return "Lufttemperatur"
-            case .waterTemperature: return "Wassertemperatur"
-            }
-        }
-
-        var icon: String {
-            switch self {
-            case .bestScore:    return "star.fill"
-            case .nearest:      return "location.fill"
-            case .alphabetical: return "textformat.abc"
-            case .airTemperature: return "wind"
-            case .waterTemperature: return "drop.fill"
-            }
-        }
-
-        var shortLabel: String {
-            switch self {
-            case .bestScore: return "Score"
-            case .nearest: return "Distanz"
-            case .alphabetical: return "A-Z"
-            case .airTemperature: return "Luft"
-            case .waterTemperature: return "Wasser"
-            }
-        }
-
-        var defaultDirection: SortDirection {
-            switch self {
-            case .nearest, .alphabetical: return .ascending
-            case .bestScore, .airTemperature, .waterTemperature: return .descending
-            }
-        }
-    }
-
-    enum SortDirection {
-        case ascending
-        case descending
-
-        var symbol: String {
-            switch self {
-            case .ascending: return "arrow.up"
-            case .descending: return "arrow.down"
-            }
-        }
-
-        mutating func toggle() {
-            self = self == .ascending ? .descending : .ascending
-        }
-    }
-
     // MARK: - Inexpensive Computed Properties (no weatherCache access)
 
     private var topNearbyPicks: [NearbyPick] {
@@ -118,7 +51,7 @@ struct HomeView: View {
         let nearbyCandidates = dataService.lakes
             .map { ($0, $0.distance(from: userLocation)) }
             .sorted { $0.1 < $1.1 }
-            .prefix(24)
+            .prefix(20)
 
         let weatherCache = weatherService.weatherCache
         return nearbyCandidates
@@ -154,7 +87,6 @@ struct HomeView: View {
         return sortOption.shortLabel
     }
 
-    private var season: Season { .current }
     private var hasCompleteWeatherCoverage: Bool {
         weatherService.hasCompleteWeather(for: dataService.lakes)
     }
@@ -166,71 +98,85 @@ struct HomeView: View {
     }
 
     private var heroState: DuckState {
-        if dataService.isLoading { return .zufrieden }
+        if dataService.isLoading { return .zoegernd }
         if let avg = cachedNearbyAverageScore { return avg.duckState }
         if let avg = cachedAverageScore { return avg.duckState }
-        return .zufrieden
+        return .zoegernd
     }
 
     private var heroGreeting: String {
-        let hour = Calendar.current.component(.hour, from: Date())
-        if hour < 6  { return "Heast, immer no munter?" }
-        if hour < 12 { return "Grias di!" }
-        if hour < 18 { return "Servas! I hob Flossn-Jucken." }
-        return "Guadn Abend!"
+        let now = Date()
+        let hour = Calendar.current.component(.hour, from: now)
+        let minute = Calendar.current.component(.minute, from: now)
+        let totalMinutes = hour * 60 + minute
+        if totalMinutes < 330 { return "Häh, du bist noch wach?" }   // before 5:30
+        if totalMinutes < 660 { return "Guten Morgen!" }              // 5:30–10:59
+        if hour < 18 { return "Servus!" }                              // 11:00–17:59
+        if hour < 23 { return "Guten Abend!" }                        // 18:00–22:59
+        return "Häh, du bist noch wach?"                               // 23:00+
     }
 
     private var heroMessage: String {
-        if dataService.isLoading { return "I schnüffel grad durchs Wasser-Orakel... gib ma a Sekundal." }
+        if dataService.isLoading { return "Ich schnüffle gerade noch... einen Moment." }
 
         let total = dataService.lakes.count
-        if total == 0 { return "No koane Seen da? Heast, i find da glei a poar." }
+        if total == 0 { return "Keine Seen da? Moment..." }
         if shouldBlockForWeather {
-            return "I jonglier grad mit \(total) Seen gleichzeitig. Ned hudeln, i rechne no!"
+            return "Nicht stressen, ich rechne noch!"
         }
         if weatherService.isUsingStaleCache {
-            return "Ranking steht scho, oba i mach im Hintergrund no an Frische-Check."
+            return "Moment, ich mache im Hintergrund noch einen Frische-Check."
         }
 
         if let avg = cachedAverageScore {
             return cachedAverageHeroMessage ?? Self.randomizedHeroMessage(for: avg.level)
         }
 
-        return "\(total) Gewässer san da. I schupf grad die Wetterdaten nach."
+        return "Ich lade gerade die Wetterdaten nach."
     }
 
     private static func randomizedHeroMessage(for level: SwimScore.Level) -> String {
         switch level {
         case .perfekt:
             return [
-                "Oida, heit is Badetag vom Feinsten. REIN DA!",
-                "Sonne oben, Laune oben, Flossn oben. GEMMA!",
-                "Heit is so guad, sogar mei Quietscheentn macht an Backflip."
-            ].randomElement() ?? "Oida, heit is Badetag vom Feinsten. REIN DA!"
+                "Badebedingungen vom Feinsten gerade. REIN DAAAAAA!",
+                "Sonne oben, Laune oben, Flossen oben. Ab ins Wasser!",
+                "Mega gute Badebedingungen gerade. TU ES. TU ES. TU ES.",
+                "AB INS WASSER OIDA! Nahezu perfekte Badebedingungen derzeit!",
+                "Wenn du jetzt nicht SOFORT schwimmen gehst, werd ich grantig. REIN DA!"
+            ].randomElement() ?? "Badebedingungen vom Feinsten gerade. REIN DAAAAAA!"
         case .gut:
             return [
-                "Passt scho richtig guad. *Ducky gibt den offiziellen Nicker*",
-                "Ned perfekt, oba gschmeidig. Kann ma sehr wohl machen.",
-                "Des fühlt sich nach solidem Sprung ins Wasser an."
-            ].randomElement() ?? "Passt scho richtig guad. *Ducky gibt den offiziellen Nicker*"
+                "Passt schon richtig gut derzeit. Rein ins Wasser!",
+                "Nicht perfekt derzeit, aber schon recht fein. Kann man sehr wohl machen.",
+                "Fühlt sich gerade nach einem soliden Sprung ins Wasser an.",
+                "Allzu viel besser wird's nicht mehr. Spring rein. Tu es.",
+                "Geh eine Runde schwimmen. Vertrau mir. (Ducky gibt keine Gewähr.)"
+            ].randomElement() ?? "Passt schon richtig gut derzeit. Rein ins Wasser!"
         case .mittel:
             return [
-                "Jo mei, geht so. Kann lustig sein, kann a wild werden.",
-                "I bin a bissi skeptisch, oba ned komplett dagegen.",
-                "Heit is eher „wennst magst“ statt „muss sein“."
-            ].randomElement() ?? "Jo mei, geht so. Kann lustig sein, kann a wild werden."
+                "Naja, geht so derzeit. Kann lustig sein, kann auch wild werden.",
+                "Ich bin ein bissl skeptisch derzeit, aber nicht komplett dagegen.",
+                "Derzeit sind eher so 'wenn du magst' statt 'muss sein' Badebedingungen.",
+                "Trau dich halt. So super ist derzeit nicht, aber du bist ja Hardcore.",
+                "Als Ente würde ich es wagen. Als Mensch...?"
+            ].randomElement() ?? "Naja, geht so derzeit. Kann lustig sein, kann auch wild werden."
         case .schlecht:
             return [
-                "I glaub i bleib heit lieber im Hoodie und ess a fettes Brot.",
-                "Heit schreit alles nach Couch statt Kopfsprung.",
-                "Kann ma machen, dann brauchst danach Wärmflasche und Lebensmut."
-            ].randomElement() ?? "I glaub i bleib heit lieber im Hoodie und ess a fettes Brot."
+                "Bleib derzeit lieber im Hoodie und iss eine fette Semmel.",
+                "Derzeit schreit alles eher nach Couch als Kopfsprung.",
+                "Wenn du jetzt baden gehst, brauchst du danach medizinische Betreuung.",
+                "Ich würde derzeit nicht baden gehen. Aber you do you.",
+                "Ich bin eine Ente und nicht mal ich würde derzeit ins Wasser gehen."
+            ].randomElement() ?? "Bleib derzeit lieber im Hoodie und iss eine fette Semmel."
         case .warnung:
             return [
-                "Na heit fix ned. I zieh die Notbremse.",
-                "Heit bleibt der Schnabel trocken. Ende der Diskussion.",
-                "Heut is ka Badetag heast. Bleib daham."
-            ].randomElement() ?? "Na heit fix ned. I zieh die Notbremse."
+                "Nein, derzeit fix nicht. Ich ziehe die Notbremse.",
+                "Derzeit bleibt der Schnabel trocken. Ende der Diskussion.",
+                "Absolut kein Badewetter gerade. Bleib lieber daheim.",
+                "Bleib daheim. Chill. Kein Badewetter gerade.",
+                "Denk gar nicht erst darüber nach. Bleib daheim!"
+            ].randomElement() ?? "Nein, derzeit fix nicht. Ich ziehe die Notbremse."
         }
     }
 
@@ -372,14 +318,10 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppTheme.pageGradient
+                HomeSceneBackground(scoreLevel: heroState.scoreLevel)
                     .ignoresSafeArea()
 
-                BubbleBackground(color: AppTheme.skyBlue)
-                    .opacity(0.40)
-                    .ignoresSafeArea()
-
-                ScrollView(.vertical, showsIndicators: false) {
+                ScrollView(.vertical) {
                     VStack(spacing: 0) {
                         if !isSearchActive {
                             heroSection
@@ -387,6 +329,7 @@ struct HomeView: View {
                         contentSections
                     }
                 }
+                .scrollIndicators(.hidden)
                 .scrollDismissesKeyboard(.interactively)
                 .refreshable {
                     await dataService.refresh()
@@ -397,37 +340,18 @@ struct HomeView: View {
                     weatherHydrationOverlay
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
-            }
-            .navigationTitle("Entdecken")
-            .iOSNavigationBarStyle()
-            .toolbar {
-                ToolbarItem(placement: .iOSTopBarTrailing) {
-                    HStack(spacing: 14) {
-                        if dataService.isLoading {
-                            ProgressView()
-                        }
-                        Button { showSettings = true } label: {
-                            Image(systemName: "gearshape.fill")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(AppTheme.textSecondary)
-                        }
-                    }
+
+                if !isSearchActive {
+                    floatingSettingsButton
                 }
             }
+            .navigationBarHidden(true)
+            .iOSNavigationBarStyle()
             .navigationDestination(item: $selectedLake) { lake in
                 LakeDetailView(lake: lake)
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
-            }
-            .sheet(item: $quickActionLake) { lake in
-                QuickLakeActionsSheet(
-                    lake: lake,
-                    isFavourite: favourites.contains { $0.lakeID == lake.id },
-                    onShare: { shareLake = lake },
-                    onToggleFavourite: { toggleFavourite(lake) },
-                    onRoute: { openInMaps(lake) }
-                )
             }
             .sheet(item: $shareLake) { lake in
                 ShareCardView(
@@ -552,12 +476,42 @@ struct HomeView: View {
 
     // MARK: - Hero Section
 
+    private var isScoreVerdict: Bool {
+        !dataService.isLoading && !dataService.lakes.isEmpty && !shouldBlockForWeather && !weatherService.isUsingStaleCache && cachedAverageScore != nil
+    }
+
+    private var floatingSettingsButton: some View {
+        VStack {
+            HStack {
+                Spacer()
+                HStack(spacing: 12) {
+                    if dataService.isLoading {
+                        ProgressView()
+                    }
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .padding(12)
+                            .glassEffect(.regular.interactive().tint(.clear), in: .circle)
+                    }
+                }
+                .padding(.trailing, 16)
+                .padding(.top, 6)
+            }
+            Spacer()
+        }
+    }
+
     private var heroSection: some View {
         HomeHeroCardView(
             state: heroState,
             greeting: heroGreeting,
             message: heroMessage,
-            error: dataService.error
+            error: nil,
+            isScoreVerdict: isScoreVerdict
         )
         .padding(.bottom, 12)
     }
@@ -592,10 +546,6 @@ struct HomeView: View {
                         .offset(y: sectionsVisible ? 0 : 10)
                         .animation(AppTheme.entranceSpring.delay(0.10), value: sectionsVisible)
                 }
-
-                WaveDivider(color: AppTheme.teal, height: 24)
-                    .opacity(sectionsVisible ? 1 : 0)
-                    .animation(AppTheme.smoothEase.delay(0.13), value: sectionsVisible)
 
                 allLakesSection
                     .opacity(sectionsVisible ? 1 : 0)
@@ -651,13 +601,13 @@ struct HomeView: View {
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(AppTheme.textSecondary)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color(white: 0.45))
 
-            TextField("Gewässer oder Ort suchen...", text: $searchText)
-                .font(.system(size: 16, weight: .regular, design: .rounded))
+            TextField("Suchen...", text: $searchText, prompt: Text("Suchen...").foregroundStyle(Color(white: 0.45)))
+                .font(.system(size: 15, weight: .regular, design: .rounded))
                 .foregroundStyle(AppTheme.textPrimary)
                 .focused($isSearchFocused)
                 .submitLabel(.search)
@@ -671,36 +621,30 @@ struct HomeView: View {
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(.system(size: 14))
                         .foregroundStyle(AppTheme.textSecondary)
                 }
             }
         }
-        .padding(14)
-        .background(AppTheme.searchBarBackground.opacity(0.98), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(AppTheme.cardStroke.opacity(0.75), lineWidth: 1)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: 280)
+        .background(.white, in: Capsule())
+        .contentShape(Capsule())
         .simultaneousGesture(
             TapGesture().onEnded {
                 if !isSearchFocused {
+                    Haptics.light()
                     isSearchFocused = true
                 }
             }
         )
-        .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
-        .shadow(color: AppTheme.glowOverlay.opacity(0.08), radius: 2, y: 1)
-        .padding(.horizontal, 20)
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
     }
 
     private var nearbyTopScoreSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppTheme.sunshine)
                 Text("Top 5 in deiner Nähe")
                     .font(AppTheme.sectionTitle)
                     .foregroundStyle(AppTheme.textPrimary)
@@ -730,7 +674,7 @@ struct HomeView: View {
                                     .frame(width: 24, height: 24)
                                     .background(AppTheme.oceanBlue, in: Circle())
 
-                                SwimScoreBadge(score: pick.score, size: .medium)
+                                SwimScoreBadge(score: pick.score, size: .medium, isVisited: allVisits.contains { $0.lakeID == pick.lake.id })
 
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack(spacing: 6) {
@@ -751,7 +695,7 @@ struct HomeView: View {
                                                 .lineLimit(1)
                                         }
                                         Text("·")
-                                        Text(String(format: "%.1f km", pick.distanceKm))
+                                        Text("\(pick.distanceKm.formatted(.number.precision(.fractionLength(1)))) km")
                                     }
                                     .font(.system(size: 12, weight: .medium, design: .rounded))
                                     .foregroundStyle(AppTheme.textSecondary)
@@ -768,7 +712,7 @@ struct HomeView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .highPriorityGesture(quickActionGesture(for: pick.lake))
+                        .contextMenu { lakeContextMenu(for: pick.lake) }
 
                         if index < topNearbyPicks.count - 1 {
                             Divider()
@@ -792,9 +736,6 @@ struct HomeView: View {
         return VStack(alignment: .leading, spacing: 14) {
             if !isSearchActive {
                 HStack(spacing: 6) {
-                    Image(systemName: "list.bullet")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppTheme.teal)
                     Text("Gewässer")
                         .font(AppTheme.sectionTitle)
                         .foregroundStyle(AppTheme.textPrimary)
@@ -828,18 +769,19 @@ struct HomeView: View {
                             if sortOption != .alphabetical {
                                 Image(systemName: sortOption.icon)
                                     .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(sortOption.iconColor)
                             }
                             Text(currentSortPillLabel)
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.9)
                                 .allowsTightening(true)
+                                .foregroundStyle(AppTheme.textSecondary)
                         }
-                        .foregroundStyle(AppTheme.oceanBlue)
                         .frame(minWidth: 76)
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(AppTheme.oceanBlue.opacity(0.1), in: Capsule())
+                        .padding(.vertical, 4)
+                        .background(AppTheme.cardBackground.opacity(0.8), in: Capsule())
                     }
 
                     Button {
@@ -850,18 +792,18 @@ struct HomeView: View {
                     } label: {
                         Image(systemName: sortDirection.symbol)
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(AppTheme.oceanBlue)
+                            .foregroundStyle(AppTheme.textSecondary)
                             .frame(width: 28, height: 26)
-                            .background(AppTheme.oceanBlue.opacity(0.1), in: Capsule())
+                            .background(AppTheme.cardBackground.opacity(0.8), in: Capsule())
                     }
                     .buttonStyle(PressableChipButtonStyle())
 
                     Text("\(displayTotalCount)")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(AppTheme.divider, in: Capsule())
+                        .background(AppTheme.cardBackground.opacity(0.8), in: Capsule())
                 }
                 .padding(.horizontal, 20)
 
@@ -886,13 +828,14 @@ struct HomeView: View {
                         LakeListRow(
                             lake: lake,
                             distanceKm: locationService.userLocation.map { lake.distance(from: $0) },
-                            isFavourite: favourites.contains { $0.lakeID == lake.id }
+                            isFavourite: favourites.contains { $0.lakeID == lake.id },
+                            isVisited: allVisits.contains { $0.lakeID == lake.id }
                         )
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
-                    .highPriorityGesture(quickActionGesture(for: lake))
+                    .contextMenu { lakeContextMenu(for: lake) }
 
                     // Use materialized array — O(1), no re-evaluation of displayLakes
                     if lake.id != visibleLakes.last?.id {
@@ -906,31 +849,20 @@ struct HomeView: View {
             .shadow(color: .black.opacity(0.04), radius: 12, y: 4)
             .padding(.horizontal, 16)
 
-            if !visibleLakes.isEmpty {
-                HStack(spacing: 5) {
-                    Image(systemName: "hand.tap.fill")
-                        .font(.system(size: 10))
-                    Text("Lange drücken zum Teilen, als Favorit hinzufügen und Route berechnen.")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                }
-                .foregroundStyle(AppTheme.textSecondary.opacity(0.75))
-                .padding(.horizontal, 20)
-            }
-
             // Progressive "load more" — adds 20 at a time rather than dumping all at once
             if displayTotalCount > visibleCount {
                 Button {
                     withAnimation(AppTheme.gentleSpring) { visibleCount += 20 }
                 } label: {
                     HStack(spacing: 6) {
-                        Text("20 mehr laden (\(displayTotalCount - visibleCount) verbleibend)")
+                        Text("20 mehr laden")
                         Image(systemName: "chevron.down")
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppTheme.oceanBlue)
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(AppTheme.oceanBlue.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(AppTheme.oceanBlue, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
                 .padding(.horizontal, 20)
             }
@@ -955,12 +887,8 @@ struct HomeView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(
-                isSelected ? AppTheme.oceanBlue : Color.clear,
+                isSelected ? AppTheme.oceanBlue : .white,
                 in: Capsule()
-            )
-            .overlay(
-                Capsule()
-                    .stroke(isSelected ? Color.clear : AppTheme.divider, lineWidth: 1.5)
             )
         }
         .buttonStyle(PressableChipButtonStyle())
@@ -1006,15 +934,27 @@ struct HomeView: View {
 
     // MARK: - Quick Actions
 
-    private func quickActionGesture(for lake: BathingWater) -> some Gesture {
-        LongPressGesture(minimumDuration: 0.22)
-            .onEnded { _ in
-                Haptics.medium()
-                quickActionLake = lake
-            }
+    @ViewBuilder
+    private func lakeContextMenu(for lake: BathingWater) -> some View {
+        let isFav = favourites.contains { $0.lakeID == lake.id }
+        Button { Haptics.light(); shareLake = lake } label: {
+            Label("Teilen", systemImage: "square.and.arrow.up")
+        }
+        Button(role: isFav ? .destructive : nil) {
+            toggleFavourite(lake)
+        } label: {
+            Label(
+                isFav ? "Favorit entfernen" : "Favorit",
+                systemImage: isFav ? "heart.slash.fill" : "heart.fill"
+            )
+        }
+        Button { openInMaps(lake) } label: {
+            Label("Route", systemImage: "map.fill")
+        }
     }
 
     private func toggleFavourite(_ lake: BathingWater) {
+        Haptics.light()
         if let existing = favourites.first(where: { $0.lakeID == lake.id }) {
             modelContext.delete(existing)
         } else {
@@ -1027,6 +967,7 @@ struct HomeView: View {
             )
             modelContext.insert(item)
         }
+        try? modelContext.save()
     }
 
     private func openInMaps(_ lake: BathingWater) {
@@ -1074,7 +1015,8 @@ private struct QuickLakeActionsSheet: View {
             Button {
                 Haptics.light()
                 dismiss()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                Task {
+                    try? await Task.sleep(for: .milliseconds(180))
                     onShare()
                 }
             } label: {
@@ -1153,96 +1095,13 @@ private struct QuickLakeActionsSheet: View {
     }
 }
 
-private struct HomeHeroMotionConfig {
-    let bubbleCount: Int
-    let bubbleColor: Color
-    let waveColor: Color
-    let waveHeight: CGFloat
-    let waveSpeed: Double
-    let waveOpacity: Double
-    let symbolNames: [String]
-    let symbolColor: Color
-    let symbolOpacity: Double
-    let symbolCount: Int
-    let symbolDrift: CGFloat
-    let symbolAmplitude: CGFloat
-
-    init(level: SwimScore.Level) {
-        switch level {
-        case .perfekt:
-            bubbleCount = 15
-            bubbleColor = .white.opacity(0.32)
-            waveColor = AppTheme.scoreColor(for: .perfekt)
-            waveHeight = 78
-            waveSpeed = 1.35
-            waveOpacity = 0.92
-            symbolNames = ["sparkles", "sun.max.fill", "drop.fill"]
-            symbolColor = AppTheme.sunshine
-            symbolOpacity = 0.85
-            symbolCount = 7
-            symbolDrift = 8
-            symbolAmplitude = 10
-        case .gut:
-            bubbleCount = 12
-            bubbleColor = .white.opacity(0.28)
-            waveColor = AppTheme.scoreColor(for: .gut)
-            waveHeight = 70
-            waveSpeed = 1.12
-            waveOpacity = 0.86
-            symbolNames = ["sparkles", "water.waves", "drop.fill"]
-            symbolColor = AppTheme.teal
-            symbolOpacity = 0.78
-            symbolCount = 6
-            symbolDrift = 6
-            symbolAmplitude = 8
-        case .mittel:
-            bubbleCount = 10
-            bubbleColor = .white.opacity(0.24)
-            waveColor = AppTheme.scoreColor(for: .mittel)
-            waveHeight = 62
-            waveSpeed = 0.95
-            waveOpacity = 0.78
-            symbolNames = ["questionmark.circle.fill", "wind", "drop.fill"]
-            symbolColor = AppTheme.sunshine
-            symbolOpacity = 0.68
-            symbolCount = 5
-            symbolDrift = 5
-            symbolAmplitude = 7
-        case .schlecht:
-            bubbleCount = 8
-            bubbleColor = .white.opacity(0.20)
-            waveColor = AppTheme.scoreColor(for: .schlecht)
-            waveHeight = 58
-            waveSpeed = 0.84
-            waveOpacity = 0.72
-            symbolNames = ["wind", "snowflake", "thermometer.low"]
-            symbolColor = AppTheme.skyBlue
-            symbolOpacity = 0.70
-            symbolCount = 5
-            symbolDrift = 5
-            symbolAmplitude = 8
-        case .warnung:
-            bubbleCount = 7
-            bubbleColor = .white.opacity(0.18)
-            waveColor = AppTheme.scoreColor(for: .warnung)
-            waveHeight = 56
-            waveSpeed = 0.76
-            waveOpacity = 0.68
-            symbolNames = ["exclamationmark.triangle.fill", "xmark.octagon.fill", "hand.raised.fill"]
-            symbolColor = AppTheme.coral
-            symbolOpacity = 0.90
-            symbolCount = 6
-            symbolDrift = 7
-            symbolAmplitude = 10
-        }
-    }
-}
 
 private struct HomeHeroCardView: View {
     let state: DuckState
     let greeting: String
     let message: String
     var error: String? = nil
+    var isScoreVerdict: Bool = false
 
     @State private var heroAppear = false
 
@@ -1250,121 +1109,77 @@ private struct HomeHeroCardView: View {
         AppTheme.scoreColor(for: state.scoreLevel)
     }
 
-    private var heroAccentColor: Color {
-        switch state.scoreLevel {
-        case .perfekt: return AppTheme.sunshine
-        case .gut: return AppTheme.skyBlue
-        case .mittel: return AppTheme.sunshine
-        case .schlecht: return AppTheme.lightBlue
-        case .warnung: return AppTheme.sunshine.opacity(0.85)
-        }
-    }
-
     var body: some View {
-        ZStack(alignment: .bottom) {
-            ZStack(alignment: .bottom) {
-                AppTheme.detailHeroGradient(for: state.scoreLevel, isDark: false)
+        VStack(spacing: 14) {
+            // Duck in blueish circle (same as onboarding)
+            ZStack {
+                Circle()
+                    .fill(AppTheme.skyBlue.opacity(0.15))
+                    .frame(width: 155, height: 155)
 
-                HomeHeroMotionLayer(level: state.scoreLevel)
+                Circle()
+                    .stroke(AppTheme.skyBlue.opacity(0.25), lineWidth: 1.5)
+                    .frame(width: 185, height: 185)
 
-                LinearGradient(
-                    colors: [
-                        .white.opacity(0.20),
-                        heroAccentColor.opacity(0.14),
-                        heroBaseColor.opacity(0.20)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottom
-                )
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            }
-            .frame(height: 310)
-            .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .stroke(.white.opacity(0.14), lineWidth: 1)
+                FloatingBubblesView(count: 8, color: AppTheme.skyBlue.opacity(0.35))
+                    .frame(width: 200, height: 175)
                     .allowsHitTesting(false)
-            )
-            .padding(.horizontal, 16)
-            .shadow(color: AppTheme.scoreColor(for: state.scoreLevel).opacity(0.28), radius: 20, y: 10)
 
-            VStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(.white.opacity(0.08))
-                        .frame(width: 130, height: 130)
-                        .scaleEffect(heroAppear ? 1.05 : 0.95)
-                    DuckView(state: state, size: 110)
-                }
-                .frame(height: 130)
-
-                Text(greeting)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.92))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        LinearGradient(
-                            colors: [heroAccentColor.opacity(0.34), heroBaseColor.opacity(0.34)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        in: Capsule()
-                    )
-                    .overlay(
-                        Capsule()
-                            .stroke(.white.opacity(0.34), lineWidth: 1)
-                    )
-                    .shadow(color: heroBaseColor.opacity(0.28), radius: 4, y: 2)
-
-                Text(LocalizedStringKey(message))
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .minimumScaleFactor(0.90)
-                    .allowsTightening(true)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        heroBaseColor.opacity(0.40),
-                                        heroAccentColor.opacity(0.26),
-                                        .white.opacity(0.18)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(.white.opacity(0.32), lineWidth: 1)
-                    )
-                    .shadow(color: heroBaseColor.opacity(0.34), radius: 7, y: 3)
-                    .shadow(color: .black.opacity(0.10), radius: 1, y: 1)
-                    .padding(.horizontal, 26)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let error {
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 10))
-                        Text(error)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                    }
-                    .foregroundStyle(.white.opacity(0.65))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.white.opacity(0.12), in: Capsule())
-                }
+                DuckView(state: state, size: 120)
             }
-            .padding(.bottom, 36)
+            .frame(height: 190)
+
+            // Greeting pill — signature blue
+            Text(greeting)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(AppTheme.oceanBlue, in: Capsule())
+                .shadow(color: AppTheme.oceanBlue.opacity(0.25), radius: 6, y: 3)
+
+            // Message bubble — score-colored
+            Text(LocalizedStringKey(message))
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .lineSpacing(3)
+                .minimumScaleFactor(0.90)
+                .allowsTightening(true)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(heroBaseColor)
+                )
+                .shadow(color: heroBaseColor.opacity(0.30), radius: 10, y: 4)
+                .padding(.horizontal, 30)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // "Duckys aktuelle Bade-Einschätzung" — only for score verdicts
+            if isScoreVerdict {
+                Text("Duckys aktuelle Bade-Einschätzung")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .tracking(0.3)
+                    .padding(.top, -6)
+            }
+
+            if let error {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
+                    Text(error)
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                }
+                .foregroundStyle(AppTheme.textSecondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.ultraThinMaterial, in: Capsule())
+            }
         }
+        .padding(.top, 40)
+        .padding(.bottom, 20)
         .onAppear {
             withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
                 heroAppear = true
@@ -1373,73 +1188,6 @@ private struct HomeHeroCardView: View {
     }
 }
 
-private struct HomeHeroMotionLayer: View {
-    let level: SwimScore.Level
-
-    private var config: HomeHeroMotionConfig { .init(level: level) }
-
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            FloatingBubblesView(count: config.bubbleCount, color: config.bubbleColor)
-                .padding(.top, 8)
-
-            HomeHeroFloatingSymbolsView(config: config)
-                .padding(.vertical, 12)
-
-            WaterWaveView(baseColor: config.waveColor, height: config.waveHeight, speed: config.waveSpeed)
-                .frame(height: 104)
-                .opacity(config.waveOpacity)
-                .offset(y: 16)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
-private struct HomeHeroFloatingSymbolsView: View {
-    let config: HomeHeroMotionConfig
-
-    var body: some View {
-        GeometryReader { proxy in
-            TimelineView(.animation) { timeline in
-                let t = timeline.date.timeIntervalSinceReferenceDate
-                ZStack {
-                    ForEach(0..<config.symbolCount, id: \.self) { index in
-                        let frame = symbolFrame(index: index, time: t, in: proxy.size)
-                        Image(systemName: config.symbolNames[index % config.symbolNames.count])
-                            .font(.system(size: frame.size, weight: .semibold, design: .rounded))
-                            .foregroundStyle(config.symbolColor.opacity(config.symbolOpacity))
-                            .shadow(color: .black.opacity(0.16), radius: 2, y: 1)
-                            .position(x: frame.x, y: frame.y)
-                    }
-                }
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
-    private func symbolFrame(index: Int, time: TimeInterval, in size: CGSize) -> (x: CGFloat, y: CGFloat, size: CGFloat) {
-        let indexValue = Double(index + 1)
-        let phase = time * (0.58 + (indexValue * 0.03)) + indexValue * 1.77
-        let xUnit = normalized(index: index, salt: 1.11)
-        let yUnit = normalized(index: index, salt: 2.73)
-        let sizeUnit = normalized(index: index, salt: 5.49)
-
-        let baseX = size.width * (0.12 + 0.76 * xUnit)
-        let baseY = size.height * (0.18 + 0.58 * yUnit)
-        let driftX = CGFloat(cos(phase)) * config.symbolDrift
-        let driftY = CGFloat(sin(phase * 1.3)) * config.symbolAmplitude
-        let symbolSize = 10 + (10 * sizeUnit)
-
-        return (x: baseX + driftX, y: baseY + driftY, size: symbolSize)
-    }
-
-    private func normalized(index: Int, salt: Double) -> CGFloat {
-        let value = sin(Double(index) * 12.9898 + salt * 78.233) * 43758.5453
-        return CGFloat(value - floor(value))
-    }
-}
 
 private struct HomeHeroCardPreviewContainer: View {
     let state: DuckState
@@ -1448,7 +1196,7 @@ private struct HomeHeroCardPreviewContainer: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            AppTheme.pageGradient
+            HomeSceneBackground(scoreLevel: state.scoreLevel)
                 .ignoresSafeArea()
 
             HomeHeroCardView(
@@ -1471,45 +1219,87 @@ private struct HomeHeroCardPreviewContainer: View {
         .environment(environment.lakeContentService)
         .environment(environment.lakePlaceService)
         .environment(environment.tipJarService)
-        .modelContainer(for: FavouriteItem.self, inMemory: true)
+        .modelContainer(for: [FavouriteItem.self, LakeVisit.self, LakeNote.self], inMemory: true)
+}
+
+#Preview("All Ducky States") {
+    ScrollView(.horizontal) {
+        HStack(spacing: 0) {
+            HomeHeroCardPreviewContainer(
+                state: .begeistert,
+                greeting: "Servus!",
+                message: "Badebedingungen vom Feinsten gerade. REIN DAAAAAA!"
+            )
+            .frame(width: 390, height: 750)
+
+            HomeHeroCardPreviewContainer(
+                state: .zufrieden,
+                greeting: "Guten Morgen!",
+                message: "Passt schon richtig gut derzeit. Rein ins Wasser!"
+            )
+            .frame(width: 390, height: 750)
+
+            HomeHeroCardPreviewContainer(
+                state: .zoegernd,
+                greeting: "Servus!",
+                message: "Naja, geht so derzeit. Kann lustig sein, kann auch wild werden."
+            )
+            .frame(width: 390, height: 750)
+
+            HomeHeroCardPreviewContainer(
+                state: .frierend,
+                greeting: "Guten Abend!",
+                message: "Bleib derzeit lieber im Hoodie und iss eine fette Semmel."
+            )
+            .frame(width: 390, height: 750)
+
+            HomeHeroCardPreviewContainer(
+                state: .warnend,
+                greeting: "Häh, du bist noch wach?",
+                message: "Nein, derzeit fix nicht. Ich ziehe die Notbremse."
+            )
+            .frame(width: 390, height: 750)
+        }
+    }
+    .scrollTargetBehavior(.paging)
 }
 
 #Preview("Hero Perfekt") {
     HomeHeroCardPreviewContainer(
         state: .begeistert,
-        greeting: "Grias di!",
-        message: "Oida, heit is Badetag vom Feinsten. REIN DA!"
+        greeting: "Servus!",
+        message: "Badebedingungen vom Feinsten gerade. REIN DAAAAAA!"
     )
 }
 
 #Preview("Hero Gut") {
     HomeHeroCardPreviewContainer(
         state: .zufrieden,
-        greeting: "Grias di!",
-        message: "Passt scho richtig guad. *Ducky gibt den offiziellen Nicker*"
+        greeting: "Guten Morgen!",
+        message: "Passt schon richtig gut derzeit. Rein ins Wasser!"
     )
 }
 
 #Preview("Hero Mittel") {
     HomeHeroCardPreviewContainer(
         state: .zoegernd,
-        greeting: "Servas! I hob Flossn-Jucken.",
-        message: "I bin a bissi skeptisch, oba ned komplett dagegen."
+        greeting: "Servus!",
+        message: "Naja, geht so derzeit. Kann lustig sein, kann auch wild werden."
     )
 }
 
 #Preview("Hero Schlecht") {
     HomeHeroCardPreviewContainer(
         state: .frierend,
-        greeting: "Guadn Abend!",
-        message: "I glaub i bleib heit lieber im Hoodie und ess a fettes Brot."
+        greeting: "Guten Abend!",
+        message: "Bleib derzeit lieber im Hoodie und iss eine fette Semmel."
     )
 }
 
 #Preview("Hero Warnung") {
     HomeHeroCardPreviewContainer(
         state: .warnend,
-        greeting: "Heast, immer no munter?",
-        message: "Na heit fix ned. I zieh die Notbremse."
+        greeting: "Häh, du bist noch wach?",
+        message: "Nein, derzeit fix nicht. Ich ziehe die Notbremse."
     )
 }

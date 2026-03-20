@@ -43,31 +43,31 @@ enum AppTheme {
         dark: (0.93, 0.93, 0.95)
     )
     static let textSecondary = adaptive(
-        light: (0.44, 0.44, 0.47),
+        light: (0.38, 0.40, 0.48),
         dark: (0.62, 0.62, 0.65)
     )
     static let divider = adaptive(
-        light: (0.90, 0.91, 0.92),
+        light: (0.88, 0.90, 0.95),
         dark: (0.22, 0.22, 0.24)
     )
     static let pageBackground = adaptive(
-        light: (0.965, 0.97, 0.98),
+        light: (0.95, 0.96, 0.98),
         dark: (0.07, 0.07, 0.09)
     )
     static let cardBackground = adaptive(
-        light: (1.0, 1.0, 1.0),
+        light: (0.99, 0.98, 1.0),
         dark: (0.14, 0.14, 0.16)
     )
     static let searchBarBackground = adaptive(
-        light: (0.94, 0.94, 0.96),
+        light: (0.93, 0.95, 0.98),
         dark: (0.18, 0.18, 0.20)
     )
     static let cardStroke = adaptive(
-        light: (0.86, 0.89, 0.94),
+        light: (0.84, 0.88, 0.96),
         dark: (0.26, 0.27, 0.30)
     )
     static let glowOverlay = adaptive(
-        light: (1.0, 1.0, 1.0),
+        light: (0.94, 0.96, 1.0),
         dark: (0.38, 0.42, 0.52)
     )
 
@@ -104,13 +104,43 @@ enum AppTheme {
         LinearGradient(
             colors: [
                 pageBackground,
-                oceanBlue.opacity(0.06),
-                teal.opacity(0.04)
+                oceanBlue.opacity(0.10),
+                teal.opacity(0.07)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
+
+    static let homeGradient = LinearGradient(
+        colors: [
+            Color(red: 1.0, green: 0.94, blue: 0.90),
+            Color(red: 0.88, green: 0.94, blue: 1.0),
+            Color(red: 0.90, green: 0.98, blue: 0.95)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    static let favouritesGradient = LinearGradient(
+        colors: [
+            Color(red: 1.0, green: 0.92, blue: 0.90),
+            Color(red: 0.93, green: 0.90, blue: 1.0),
+            Color(red: 0.88, green: 0.94, blue: 1.0)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    static let settingsGradient = LinearGradient(
+        colors: [
+            Color(red: 0.91, green: 0.98, blue: 0.95),
+            Color(red: 0.92, green: 0.95, blue: 1.0),
+            Color(red: 0.95, green: 0.92, blue: 1.0)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
 
     // MARK: - Typography
 
@@ -134,8 +164,8 @@ enum AppTheme {
         dark: (0.20, 0.82, 0.48)
     )
     static let scoreGut = adaptive(
-        light: (0.0, 0.70, 0.62),    // teal
-        dark: (0.10, 0.78, 0.70)
+        light: (0.40, 0.78, 0.35),   // lime-green
+        dark: (0.48, 0.85, 0.42)
     )
     static let scoreMittel = adaptive(
         light: (0.95, 0.75, 0.10),   // amber
@@ -173,9 +203,9 @@ enum AppTheme {
         let base = scoreColor(for: level)
         return LinearGradient(
             colors: [
-                base.opacity(isDark ? 0.44 : 0.26),
-                base.opacity(isDark ? 0.28 : 0.16),
-                pageBackground.opacity(isDark ? 0.96 : 0.88)
+                base.opacity(isDark ? 0.44 : 0.32),
+                base.opacity(isDark ? 0.28 : 0.22),
+                pageBackground.opacity(isDark ? 0.96 : 0.82)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -186,9 +216,9 @@ enum AppTheme {
         let base = scoreColor(for: level)
         return LinearGradient(
             colors: [
-                base.opacity(isDark ? 0.56 : 0.34),
-                base.opacity(isDark ? 0.42 : 0.23),
-                base.opacity(isDark ? 0.18 : 0.09)
+                base.opacity(isDark ? 0.56 : 0.40),
+                base.opacity(isDark ? 0.42 : 0.30),
+                base.opacity(isDark ? 0.18 : 0.14)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -210,163 +240,4 @@ enum AppTheme {
     static let quickSpring = Animation.spring(response: 0.35, dampingFraction: 0.7, blendDuration: 0)
     static let entranceSpring = Animation.spring(response: 0.52, dampingFraction: 0.84, blendDuration: 0.05)
     static let smoothEase = Animation.easeInOut(duration: 0.9)
-}
-
-// MARK: - Card Style Modifier
-
-struct AppCardStyle: ViewModifier {
-    var padding: CGFloat = 16
-
-    func body(content: Content) -> some View {
-        content
-            .padding(padding)
-            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
-                    .stroke(AppTheme.cardStroke.opacity(0.45), lineWidth: 1)
-                    .allowsHitTesting(false)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                AppTheme.glowOverlay.opacity(0.10),
-                                .clear
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .allowsHitTesting(false)
-            )
-            .shadow(color: .black.opacity(0.07), radius: 16, x: 0, y: 6)
-    }
-}
-
-extension View {
-    func appCard(padding: CGFloat = 16) -> some View {
-        modifier(AppCardStyle(padding: padding))
-    }
-}
-
-// MARK: - Shimmer Effect
-
-struct ShimmerModifier: ViewModifier {
-    @State private var phase: CGFloat = -1
-
-    func body(content: Content) -> some View {
-        content
-            .overlay(
-                LinearGradient(
-                    colors: [.clear, .white.opacity(0.4), .clear],
-                    startPoint: .init(x: phase, y: 0.5),
-                    endPoint: .init(x: phase + 0.5, y: 0.5)
-                )
-                .animation(.linear(duration: 1.5).repeatForever(autoreverses: false), value: phase)
-                .allowsHitTesting(false)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
-            .onAppear { phase = 1.5 }
-    }
-}
-
-extension View {
-    func shimmer() -> some View { modifier(ShimmerModifier()) }
-}
-
-// MARK: - Bubble Animation Background
-
-struct BubbleBackground: View {
-    let color: Color
-    @State private var animate = false
-    @State private var bubbles: [BubbleParams] = []
-
-    struct BubbleParams: Identifiable {
-        let id: Int
-        let opacity: Double
-        let size: CGFloat
-        let x: CGFloat
-        let y1: CGFloat
-        let y2: CGFloat
-        let blur: CGFloat
-    }
-
-    var body: some View {
-        ZStack {
-            ForEach(bubbles) { b in
-                Circle()
-                    .fill(color.opacity(b.opacity))
-                    .frame(width: b.size)
-                    .offset(x: b.x, y: animate ? b.y2 : b.y1)
-                    .blur(radius: b.blur)
-            }
-        }
-        .onAppear {
-            if bubbles.isEmpty {
-                bubbles = (0..<6).map { i in
-                    BubbleParams(
-                        id: i,
-                        opacity: .random(in: 0.03...0.08),
-                        size: .random(in: 40...120),
-                        x: .random(in: -150...150),
-                        y1: .random(in: -200...200),
-                        y2: .random(in: -200...200),
-                        blur: .random(in: 10...30)
-                    )
-                }
-            }
-            withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) {
-                animate.toggle()
-            }
-        }
-    }
-}
-
-// MARK: - Haptics
-
-enum Haptics {
-    static func light() {
-        #if canImport(UIKit)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        #endif
-    }
-
-    static func medium() {
-        #if canImport(UIKit)
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        #endif
-    }
-
-    static func success() {
-        #if canImport(UIKit)
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        #endif
-    }
-}
-
-// MARK: - Recent Lakes
-
-struct RecentLake: Codable, Identifiable {
-    let id: String
-    let name: String
-
-    private static let storageKey = "recentLakes"
-    private static let maxCount = 5
-
-    static func load() -> [RecentLake] {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let items = try? JSONDecoder().decode([RecentLake].self, from: data)
-        else { return [] }
-        return items
-    }
-
-    static func add(_ lake: RecentLake) {
-        var recents = load().filter { $0.id != lake.id }
-        recents.insert(lake, at: 0)
-        if recents.count > maxCount { recents = Array(recents.prefix(maxCount)) }
-        if let data = try? JSONEncoder().encode(recents) {
-            UserDefaults.standard.set(data, forKey: storageKey)
-        }
-    }
 }

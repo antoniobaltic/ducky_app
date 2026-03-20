@@ -8,91 +8,18 @@ struct FavouritesView: View {
     @Environment(WeatherService.self) private var weatherService
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \FavouriteItem.addedAt, order: .reverse) var favourites: [FavouriteItem]
-    @State private var quickActionTarget: FavouriteQuickActionTarget?
+    @Query var allVisits: [LakeVisit]
     @State private var selectedLake: BathingWater?
     @State private var shareLake: BathingWater?
     @State private var sortOption: SortOption = .bestScore
     @State private var sortDirection: SortDirection = .descending
 
-    init() {
-        _favourites = Query(sort: \FavouriteItem.addedAt, order: .reverse)
-    }
-
-    private struct FavouriteQuickActionTarget: Identifiable {
-        let lakeID: String
-        let lakeName: String
-        let municipalityName: String?
-        let lake: BathingWater?
-        var id: String { lakeID }
-    }
-
-    enum SortOption: String, CaseIterable {
-        case bestScore, nearest, alphabetical, airTemperature, waterTemperature
-
-        static let displayOrder: [SortOption] = [
-            .bestScore,
-            .nearest,
-            .alphabetical,
-            .airTemperature,
-            .waterTemperature
-        ]
-
-        var label: String {
-            switch self {
-            case .bestScore: return "Bester Score"
-            case .nearest: return "Entfernung"
-            case .alphabetical: return "A–Z"
-            case .airTemperature: return "Lufttemperatur"
-            case .waterTemperature: return "Wassertemperatur"
-            }
-        }
-
-        var icon: String {
-            switch self {
-            case .bestScore: return "star.fill"
-            case .nearest: return "location.fill"
-            case .alphabetical: return "textformat.abc"
-            case .airTemperature: return "wind"
-            case .waterTemperature: return "drop.fill"
-            }
-        }
-
-        var shortLabel: String {
-            switch self {
-            case .bestScore: return "Score"
-            case .nearest: return "Distanz"
-            case .alphabetical: return "A-Z"
-            case .airTemperature: return "Luft"
-            case .waterTemperature: return "Wasser"
-            }
-        }
-
-        var defaultDirection: SortDirection {
-            switch self {
-            case .nearest, .alphabetical: return .ascending
-            case .bestScore, .airTemperature, .waterTemperature: return .descending
-            }
-        }
-    }
-
-    enum SortDirection {
-        case ascending
-        case descending
-
-        var symbol: String {
-            switch self {
-            case .ascending: return "arrow.up"
-            case .descending: return "arrow.down"
-            }
-        }
-
-        mutating func toggle() {
-            self = self == .ascending ? .descending : .ascending
-        }
-    }
-
     private func liveData(for fav: FavouriteItem) -> BathingWater? {
         dataService.lake(withID: fav.lakeID)
+    }
+
+    private var visitedLakeCount: Int {
+        Set(allVisits.map(\.lakeID)).count
     }
 
     private var currentSortPillLabel: String {
@@ -163,11 +90,11 @@ struct FavouritesView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppTheme.pageGradient
+                AppTheme.favouritesGradient
                     .ignoresSafeArea()
 
                 BubbleBackground(color: AppTheme.warmPink)
-                    .opacity(0.32)
+                    .opacity(0.40)
                     .ignoresSafeArea()
 
                 if favourites.isEmpty {
@@ -176,11 +103,7 @@ struct FavouritesView: View {
                     ScrollView {
                         VStack(spacing: 0) {
                             favouritesHero
-
-                            // Subtle wave header
-                            WaveDivider(color: AppTheme.warmPink, height: 20)
-                                .opacity(0.5)
-                                .padding(.bottom, 4)
+                                .padding(.bottom, 8)
 
                             sortControls
                                 .padding(.horizontal, 16)
@@ -200,29 +123,15 @@ struct FavouritesView: View {
                         await syncFavouriteSnapshotAndWeather(forceRefresh: true)
                         Haptics.success()
                     }
+                    .background {
+                        FavouriteHeartFishView()
+                            .opacity(0.5)
+                    }
                 }
             }
-            .navigationTitle("Favoriten")
+            .navigationBarHidden(true)
             .navigationDestination(item: $selectedLake) { lake in
                 LakeDetailView(lake: lake)
-            }
-            .sheet(item: $quickActionTarget) { target in
-                FavouritesQuickLakeActionsSheet(
-                    lakeName: target.lake?.displayName ?? target.lakeName,
-                    isShareAvailable: target.lake != nil,
-                    isRouteAvailable: target.lake != nil,
-                    onShare: {
-                        guard let lake = target.lake else { return }
-                        shareLake = lake
-                    },
-                    onToggleFavourite: {
-                        removeFavourite(lakeID: target.lakeID)
-                    },
-                    onRoute: {
-                        guard let lake = target.lake else { return }
-                        openInMaps(lake)
-                    }
-                )
             }
             .sheet(item: $shareLake) { lake in
                 ShareCardView(
@@ -249,17 +158,18 @@ struct FavouritesView: View {
                 fav.lastKnownQuality = live.qualityRating
             }
         }
+        try? modelContext.save()
     }
 
     private var favouritesHero: some View {
         HStack(spacing: 12) {
-            DuckView(state: .begeistert, size: 48)
+            DuckView(state: .zufrieden, size: 48)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Deine Bade-Favoriten")
                     .font(.system(size: 18, weight: .heavy, design: .rounded))
                     .foregroundStyle(AppTheme.textPrimary)
-                Text("\(favourites.count) gespeichert")
+                Text("\(favourites.count) gespeichert · \(visitedLakeCount > 0 ? "\(visitedLakeCount) \(visitedLakeCount == 1 ? "See" : "Seen") besucht" : "Noch keine Seen besucht")")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(AppTheme.textSecondary)
             }
@@ -314,14 +224,15 @@ struct FavouritesView: View {
                     if sortOption != .alphabetical {
                         Image(systemName: sortOption.icon)
                             .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(sortOption.iconColor)
                     }
                     Text(currentSortPillLabel)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.9)
                         .allowsTightening(true)
+                        .foregroundStyle(AppTheme.textSecondary)
                 }
-                .foregroundStyle(AppTheme.oceanBlue)
                 .frame(minWidth: 76)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
@@ -354,47 +265,66 @@ struct FavouritesView: View {
 
     // MARK: - Empty State
 
+    @State private var glowPulse = false
+
     private var emptyState: some View {
-        ZStack {
-            // Subtle water background
-            VStack {
-                Spacer()
-                WaterWaveView(baseColor: AppTheme.skyBlue, height: 50, speed: 0.5)
-                    .frame(height: 50)
-                    .opacity(0.25)
+        VStack(spacing: 24) {
+            // Birds at the top
+            BirdsView(skyWidth: UIScreen.main.bounds.width, skyHeight: 80)
+                .frame(height: 80)
+                .allowsHitTesting(false)
+
+            ZStack {
+                // Outer glow circle
+                Circle()
+                    .fill(AppTheme.warmPink.opacity(0.06))
+                    .frame(width: 220, height: 220)
+                    .blur(radius: 20)
+                    .scaleEffect(glowPulse ? 1.08 : 0.95)
+
+                // Main pink circle
+                Circle()
+                    .fill(AppTheme.warmPink.opacity(0.10))
+                    .frame(width: 180, height: 180)
+
+                FloatingBubblesView(count: 4, color: AppTheme.warmPink.opacity(0.2))
+                    .frame(width: 200, height: 200)
+
+                // Floating hearts
+                FloatingHeartsView()
+                    .frame(width: 200, height: 240)
+                    .clipped()
+
+                DuckView(state: .zufrieden, size: 120)
             }
-            .ignoresSafeArea()
 
-            VStack(spacing: 24) {
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.warmPink.opacity(0.08))
-                        .frame(width: 160, height: 160)
+            VStack(spacing: 8) {
+                Text("Noch keine Favoriten")
+                    .font(.system(size: 24, weight: .heavy, design: .rounded))
+                    .foregroundStyle(AppTheme.textPrimary)
 
-                    FloatingBubblesView(count: 4, color: AppTheme.warmPink.opacity(0.2))
-                        .frame(width: 180, height: 180)
+                Text("Füge einen See oder ein Gewässer zu deinen\nFavoriten hinzu, um sie hier zu sehen!")
+                    .font(AppTheme.bodyText)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
 
-                    DuckView(state: .zufrieden, size: 120)
+                HStack(spacing: 6) {
+                    Image(systemName: visitedLakeCount > 0 ? "checkmark.seal.fill" : "checkmark.seal")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(visitedLakeCount > 0 ? AppTheme.freshGreen : AppTheme.textSecondary)
+                    Text(visitedLakeCount > 0 ? "Du hast \(visitedLakeCount) \(visitedLakeCount == 1 ? "See" : "Seen") besucht!" : "Du hast noch keine Seen besucht.")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(visitedLakeCount > 0 ? AppTheme.freshGreen : AppTheme.textSecondary)
                 }
-
-                VStack(spacing: 8) {
-                    Text("Noch keine Favoriten")
-                        .font(.system(size: 24, weight: .heavy, design: .rounded))
-                        .foregroundStyle(AppTheme.textPrimary)
-
-                    Text("Füge ein Gewässer zu deinen Favoriten hinzu,\num ihn hier zu sehen!")
-                        .font(AppTheme.bodyText)
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(4)
-                }
-
-                Image(systemName: "heart.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(AppTheme.warmPink.opacity(0.3))
-                    .symbolEffect(.pulse, options: .repeating)
+                .padding(.top, 4)
             }
-            .padding()
+        }
+        .padding()
+        .onAppear {
+            withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
+                glowPulse = true
+            }
         }
     }
 
@@ -410,6 +340,7 @@ struct FavouritesView: View {
         return FavouriteSwipeActionRow(onDelete: {
             withAnimation(AppTheme.quickSpring) {
                 modelContext.delete(fav)
+                try? modelContext.save()
             }
         }) { isTapBlocked in
             Button {
@@ -421,32 +352,37 @@ struct FavouritesView: View {
                     fav: fav,
                     quality: quality,
                     live: live,
-                    distanceKm: distanceKm
+                    distanceKm: distanceKm,
+                    isVisited: allVisits.contains { $0.lakeID == fav.lakeID }
                 )
             }
             .buttonStyle(.plain)
             .contentShape(Rectangle())
-            .highPriorityGesture(quickActionGesture(for: fav))
-        }
-    }
-
-    private func quickActionGesture(for fav: FavouriteItem) -> some Gesture {
-        LongPressGesture(minimumDuration: 0.22)
-            .onEnded { _ in
-                Haptics.medium()
-                quickActionTarget = FavouriteQuickActionTarget(
-                    lakeID: fav.lakeID,
-                    lakeName: fav.lakeName,
-                    municipalityName: fav.municipalityName,
-                    lake: liveData(for: fav)
-                )
+            .contextMenu {
+                if let lake = liveData(for: fav) {
+                    Button { shareLake = lake } label: {
+                        Label("Teilen", systemImage: "square.and.arrow.up")
+                    }
+                }
+                Button(role: .destructive) {
+                    removeFavourite(lakeID: fav.lakeID)
+                } label: {
+                    Label("Favorit entfernen", systemImage: "heart.slash.fill")
+                }
+                if let lake = liveData(for: fav) {
+                    Button { openInMaps(lake) } label: {
+                        Label("Route", systemImage: "map.fill")
+                    }
+                }
             }
+        }
     }
 
     private func removeFavourite(lakeID: String) {
         guard let fav = favourites.first(where: { $0.lakeID == lakeID }) else { return }
         withAnimation(AppTheme.quickSpring) {
             modelContext.delete(fav)
+            try? modelContext.save()
         }
     }
 
@@ -469,6 +405,7 @@ private struct FavouriteRowContent: View {
     let quality: String?
     let live: BathingWater?
     let distanceKm: Double?
+    var isVisited: Bool = false
 
     @Environment(WeatherService.self) private var weatherService
     @State private var weather: LakeWeather?
@@ -491,7 +428,7 @@ private struct FavouriteRowContent: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            SwimScoreBadge(score: score, size: .medium)
+            SwimScoreBadge(score: score, size: .medium, isVisited: isVisited)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(live?.displayName ?? fav.lakeName)
@@ -597,12 +534,12 @@ private struct FavouriteRowContent: View {
             temperatureChip(
                 icon: "wind",
                 iconColor: AppTheme.airTempGreen,
-                value: weather?.airTemperature.map { String(format: "%.0f°C", $0) } ?? "-"
+                value: weather?.airTemperature.map { "\($0.formatted(.number.precision(.fractionLength(0))))°C" } ?? "-"
             )
             temperatureChip(
                 icon: "drop.fill",
                 iconColor: AppTheme.oceanBlue,
-                value: live?.currentWaterTemperature.map { String(format: "%.0f°C", $0) } ?? "-"
+                value: live?.currentWaterTemperature.map { "\($0.formatted(.number.precision(.fractionLength(0))))°C" } ?? "-"
             )
             Spacer(minLength: 0)
         }
@@ -689,7 +626,7 @@ private struct FavouriteRowContent: View {
             HStack(spacing: 2) {
                 Image(systemName: "location.fill")
                     .font(.system(size: 9))
-                Text(String(format: "%.0f km", dist))
+                Text("\(dist.formatted(.number.precision(.fractionLength(0)))) km")
                     .font(AppTheme.smallCaption)
             }
             .foregroundStyle(.tertiary)
@@ -716,7 +653,7 @@ private struct FavouriteSwipeActionRow<Content: View>: View {
     @State private var isDeleting = false
     @State private var swipeAxis: SwipeAxis = .undecided
     @State private var suppressTap = false
-    @State private var tapReleaseWorkItem: DispatchWorkItem?
+    @State private var tapReleaseTask: Task<Void, Never>?
 
     private let actionWidth: CGFloat = 86
     private let fullSwipeThreshold: CGFloat = 145
@@ -753,7 +690,7 @@ private struct FavouriteSwipeActionRow<Content: View>: View {
         .simultaneousGesture(swipeGesture)
         .clipped()
         .onDisappear {
-            tapReleaseWorkItem?.cancel()
+            tapReleaseTask?.cancel()
         }
     }
 
@@ -777,7 +714,7 @@ private struct FavouriteSwipeActionRow<Content: View>: View {
                             }
                         }
                         swipeAxis = .vertical
-                        blockTaps(for: 0.20)
+                        blockTaps(for: .milliseconds(200))
                         return
                     }
 
@@ -786,7 +723,7 @@ private struct FavouriteSwipeActionRow<Content: View>: View {
                     swipeAxis = .horizontal
                 }
                 guard swipeAxis == .horizontal else { return }
-                blockTaps(for: 0.25)
+                blockTaps(for: .milliseconds(250))
 
                 if translation < 0 {
                     offsetX = max(-160, translation)
@@ -798,7 +735,7 @@ private struct FavouriteSwipeActionRow<Content: View>: View {
                 defer { swipeAxis = .undecided }
                 guard !isDeleting else { return }
                 guard swipeAxis == .horizontal else {
-                    blockTaps(for: 0.16)
+                    blockTaps(for: .milliseconds(160))
                     return
                 }
                 let translation = value.translation.width
@@ -810,12 +747,12 @@ private struct FavouriteSwipeActionRow<Content: View>: View {
                     withAnimation(AppTheme.quickSpring) {
                         offsetX = -actionWidth
                     }
-                    blockTaps(for: 0.25)
+                    blockTaps(for: .milliseconds(250))
                 } else {
                     withAnimation(AppTheme.quickSpring) {
                         offsetX = 0
                     }
-                    blockTaps(for: 0.20)
+                    blockTaps(for: .milliseconds(200))
                 }
             }
     }
@@ -823,7 +760,7 @@ private struct FavouriteSwipeActionRow<Content: View>: View {
     private func triggerDelete(animatedOffscreen: Bool) {
         guard !isDeleting else { return }
         isDeleting = true
-        blockTaps(for: 0.4)
+        blockTaps(for: .milliseconds(400))
         Haptics.medium()
 
         if animatedOffscreen {
@@ -832,133 +769,136 @@ private struct FavouriteSwipeActionRow<Content: View>: View {
             }
         }
 
-        let delay: TimeInterval = animatedOffscreen ? 0.12 : 0.0
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+        let delay: Duration = animatedOffscreen ? .milliseconds(120) : .zero
+        Task {
+            try? await Task.sleep(for: delay)
             onDelete()
         }
     }
 
-    private func blockTaps(for duration: TimeInterval = 0.22) {
+    private func blockTaps(for duration: Duration = .milliseconds(220)) {
         suppressTap = true
-        tapReleaseWorkItem?.cancel()
+        tapReleaseTask?.cancel()
 
-        let work = DispatchWorkItem {
+        tapReleaseTask = Task {
+            try? await Task.sleep(for: duration)
             suppressTap = false
         }
-        tapReleaseWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: work)
     }
 }
 
-private struct FavouritesQuickLakeActionsSheet: View {
-    let lakeName: String
-    let isShareAvailable: Bool
-    let isRouteAvailable: Bool
-    let onShare: () -> Void
-    let onToggleFavourite: () -> Void
-    let onRoute: () -> Void
+// MARK: - Floating Hearts
 
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Image(systemName: "duck.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(AppTheme.sunshine)
-                Text(lakeName)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .lineLimit(2)
-                Spacer()
-            }
-
-            Button {
-                Haptics.light()
-                dismiss()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                    onShare()
-                }
-            } label: {
-                quickActionRow(
-                    title: "Teilen",
-                    subtitle: "Gewässer teilen.",
-                    icon: "square.and.arrow.up",
-                    tint: AppTheme.oceanBlue
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(!isShareAvailable)
-            .opacity(isShareAvailable ? 1 : 0.45)
-
-            Button {
-                Haptics.medium()
-                onToggleFavourite()
-                dismiss()
-            } label: {
-                quickActionRow(
-                    title: "Favorit entfernen",
-                    subtitle: "Aus Favoriten löschen.",
-                    icon: "heart.slash.fill",
-                    tint: AppTheme.warmPink
-                )
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                Haptics.medium()
-                onRoute()
-                dismiss()
-            } label: {
-                quickActionRow(
-                    title: "Route",
-                    subtitle: "In Apple Maps öffnen.",
-                    icon: "map.fill",
-                    tint: AppTheme.teal
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(!isRouteAvailable)
-            .opacity(isRouteAvailable ? 1 : 0.45)
-
-            Spacer(minLength: 0)
-        }
-        .padding(20)
-        .presentationDetents([.height(270)])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(26)
+private struct FloatingHeartsView: View {
+    private struct HeartData: Identifiable {
+        let id = UUID()
+        let x: CGFloat        // 0…1 relative x
+        let size: CGFloat      // 8…16
+        let opacity: Double    // 0.15…0.45
+        let duration: Double   // 3…6
+        let delay: Double      // 0…3
     }
 
-    private func quickActionRow(
-        title: String,
-        subtitle: String,
-        icon: String,
-        tint: Color
-    ) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(tint)
-                .frame(width: 32, height: 32)
-                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
-                Text(subtitle)
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
-
-            Spacer()
-        }
-        .padding(12)
-        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(AppTheme.divider, lineWidth: 1)
+    private let hearts: [HeartData] = (0..<6).map { _ in
+        HeartData(
+            x: CGFloat.random(in: 0.15...0.85),
+            size: CGFloat.random(in: 8...16),
+            opacity: Double.random(in: 0.15...0.45),
+            duration: Double.random(in: 3.5...6.0),
+            delay: Double.random(in: 0...2.5)
         )
+    }
+
+    @State private var animate = false
+
+    var body: some View {
+        GeometryReader { geo in
+            ForEach(hearts) { heart in
+                Image(systemName: "heart.fill")
+                    .font(.system(size: heart.size))
+                    .foregroundStyle(AppTheme.warmPink.opacity(heart.opacity))
+                    .position(
+                        x: heart.x * geo.size.width,
+                        y: animate ? -20 : geo.size.height * 0.7
+                    )
+                    .opacity(animate ? 0 : 1)
+                    .animation(
+                        .easeInOut(duration: heart.duration)
+                        .repeatForever(autoreverses: false)
+                        .delay(heart.delay),
+                        value: animate
+                    )
+            }
+        }
+        .onAppear { animate = true }
+        .allowsHitTesting(false)
+    }
+}
+
+// MARK: - Heart Fish (Favourites background)
+
+private struct FavouriteHeartFishView: View {
+    private struct FishInfo {
+        let baseX: CGFloat
+        let baseY: CGFloat
+        let size: CGFloat
+        let period: Double
+        let range: CGFloat
+        let phase: Double
+        let opacity: Double
+        let goesRight: Bool
+    }
+
+    private let fishData: [FishInfo] = [
+        .init(baseX: 0.15, baseY: 0.15, size: 16, period: 14, range: 0.22, phase: 0, opacity: 0.40, goesRight: true),
+        .init(baseX: 0.75, baseY: 0.25, size: 13, period: 18, range: 0.18, phase: 3, opacity: 0.35, goesRight: false),
+        .init(baseX: 0.40, baseY: 0.35, size: 18, period: 16, range: 0.25, phase: 7, opacity: 0.45, goesRight: true),
+        .init(baseX: 0.85, baseY: 0.45, size: 11, period: 20, range: 0.15, phase: 5, opacity: 0.30, goesRight: false),
+        .init(baseX: 0.25, baseY: 0.55, size: 15, period: 15, range: 0.20, phase: 2, opacity: 0.38, goesRight: true),
+        .init(baseX: 0.60, baseY: 0.65, size: 14, period: 17, range: 0.22, phase: 9, opacity: 0.42, goesRight: false),
+        .init(baseX: 0.50, baseY: 0.78, size: 17, period: 13, range: 0.24, phase: 4, opacity: 0.35, goesRight: true),
+        .init(baseX: 0.10, baseY: 0.88, size: 12, period: 19, range: 0.16, phase: 6, opacity: 0.32, goesRight: false),
+    ]
+
+    var body: some View {
+        TimelineView(.animation) { timeline in
+            let now = timeline.date.timeIntervalSinceReferenceDate
+
+            GeometryReader { geo in
+                let w = geo.size.width
+                let h = geo.size.height
+
+                ForEach(0..<fishData.count, id: \.self) { i in
+                    let f = fishData[i]
+                    let t = now + f.phase
+                    let swimX = f.baseX * w + sin(t / f.period * .pi * 2) * f.range * w
+
+                    // Fish using FishShape
+                    FishShape()
+                        .fill(AppTheme.warmPink.opacity(f.opacity))
+                        .frame(width: f.size, height: f.size * 0.55)
+                        .scaleEffect(x: f.goesRight ? 1 : -1, y: 1)
+                        .position(x: swimX, y: f.baseY * h)
+
+                    // Two hearts rising from each fish
+                    heartView(now: now, phase: f.phase, x: swimX - 3, baseY: f.baseY * h, size: 5, cycle: 3.5)
+                    heartView(now: now, phase: f.phase + 1.5, x: swimX + 3, baseY: f.baseY * h, size: 4, cycle: 4.0)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private func heartView(now: Double, phase: Double, x: CGFloat, baseY: CGFloat, size: CGFloat, cycle: Double) -> some View {
+        let progress = (now + phase).truncatingRemainder(dividingBy: cycle) / cycle
+        let yOffset = -progress * 28
+        let opacity = max(0, 0.55 - progress * 0.75)
+
+        return Image(systemName: "heart.fill")
+            .font(.system(size: size))
+            .foregroundStyle(AppTheme.warmPink.opacity(0.5))
+            .opacity(opacity)
+            .position(x: x, y: baseY + yOffset - CGFloat(size))
     }
 }
 
@@ -971,7 +911,7 @@ private struct FavouritesQuickLakeActionsSheet: View {
         .environment(environment.weatherService)
         .environment(environment.lakeContentService)
         .environment(environment.lakePlaceService)
-        .modelContainer(for: FavouriteItem.self, inMemory: true)
+        .modelContainer(for: [FavouriteItem.self, LakeVisit.self, LakeNote.self], inMemory: true)
 }
 
 #Preview("With Favorites") {

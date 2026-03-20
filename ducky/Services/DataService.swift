@@ -2,6 +2,7 @@ import Foundation
 import CoreLocation
 import Observation
 
+@MainActor
 @Observable
 final class DataService {
     var lakes: [BathingWater] = [] {
@@ -54,11 +55,9 @@ final class DataService {
         guard !isPreviewStubbed else { return }
 
         if let cached = await loadFromCache() {
-            await MainActor.run {
-                lakes = cached
-                if lastFetch == nil {
-                    lastFetch = cacheTimestamp
-                }
+            lakes = cached
+            if lastFetch == nil {
+                lastFetch = cacheTimestamp
             }
             return
         }
@@ -80,7 +79,7 @@ final class DataService {
     // MARK: - Network
 
     private func fetchFromNetwork() async {
-        await MainActor.run { isLoading = true; error = nil }
+        isLoading = true; error = nil
 
         do {
             var request = URLRequest(url: apiURL)
@@ -89,38 +88,31 @@ final class DataService {
             // Parse off the main thread
             let parsed = try await Self.parseAsync(data: data)
 
-            await MainActor.run {
-                lakes = parsed
-                lastFetch = Date()
-                cacheTimestamp = lastFetch
-                isLoading = false
-            }
+            lakes = parsed
+            lastFetch = Date()
+            cacheTimestamp = lastFetch
+            isLoading = false
             await saveToCacheAsync(data: data)
         } catch {
             if let cached = await loadFromCache(ignoreExpiry: true) {
-                await MainActor.run {
-                    lakes = cached
-                    isLoading = false
-                    self.error = "Daten könnten veraltet sein."
-                }
+                lakes = cached
+                isLoading = false
+                self.error = "Daten könnten veraltet sein."
             } else {
-                await MainActor.run {
-                    self.error = "Keine Verbindung möglich."
-                    isLoading = false
-                }
+                self.error = "Keine Verbindung möglich."
+                isLoading = false
             }
         }
     }
 
-    // MARK: - Async Parsing (always off MainActor via Task.detached)
+    // MARK: - Async Parsing (off MainActor via @concurrent)
 
+    @concurrent
     nonisolated private static func parseAsync(data: Data) async throws -> [BathingWater] {
-        try await Task.detached(priority: .userInitiated) {
-            try Self.parse(data: data)
-        }.value
+        try Self.parse(data: data)
     }
 
-    // MARK: - Parsing (AGES nested format) — static so it's safe in Task.detached
+    // MARK: - Parsing (AGES nested format)
 
     nonisolated private static func parse(data: Data) throws -> [BathingWater] {
         let json = try JSONSerialization.jsonObject(with: data)
@@ -165,14 +157,14 @@ final class DataService {
     // MARK: - File-based Cache (avoids storing large JSON in UserDefaults)
 
     private func saveToCacheAsync(data: Data) async {
-        let dataURL = Self.cacheDataURL
-        let tsURL = Self.cacheTimestampURL
-        let now = Date()
-        let timestamp = "\(now.timeIntervalSinceReferenceDate)"
-        await Task.detached(priority: .background) {
-            try? data.write(to: dataURL, options: .atomic)
-            try? timestamp.data(using: .utf8)?.write(to: tsURL, options: .atomic)
-        }.value
+        let timestamp = "\(Date().timeIntervalSinceReferenceDate)"
+        await Self.writeCacheFiles(data: data, dataURL: Self.cacheDataURL, tsURL: Self.cacheTimestampURL, timestamp: timestamp)
+    }
+
+    @concurrent
+    nonisolated private static func writeCacheFiles(data: Data, dataURL: URL, tsURL: URL, timestamp: String) async {
+        try? data.write(to: dataURL, options: .atomic)
+        try? timestamp.data(using: .utf8)?.write(to: tsURL, options: .atomic)
     }
 
     private func loadFromCache(ignoreExpiry: Bool = false) async -> [BathingWater]? {
@@ -182,21 +174,24 @@ final class DataService {
                   let timestamp = Double(tsStr)
             else { return nil }
             let cacheDate = Date(timeIntervalSinceReferenceDate: timestamp)
-            await MainActor.run { cacheTimestamp = cacheDate }
+            cacheTimestamp = cacheDate
             let age = Date().timeIntervalSinceReferenceDate - timestamp
             guard age < cacheExpirySeconds else { return nil }
         } else {
             let cacheDate = Self.readCacheTimestamp()
-            await MainActor.run { cacheTimestamp = cacheDate }
+            cacheTimestamp = cacheDate
         }
 
         let dataURL = Self.cacheDataURL
         guard (try? dataURL.checkResourceIsReachable()) == true else { return nil }
 
-        return try? await Task.detached(priority: .userInitiated) {
-            let data = try Data(contentsOf: dataURL)
-            return try Self.parse(data: data)
-        }.value
+        return try? await Self.readAndParseCache(dataURL: dataURL)
+    }
+
+    @concurrent
+    nonisolated private static func readAndParseCache(dataURL: URL) async throws -> [BathingWater] {
+        let data = try Data(contentsOf: dataURL)
+        return try Self.parse(data: data)
     }
 
     private static var cacheDataURL: URL {

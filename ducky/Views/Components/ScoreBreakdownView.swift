@@ -42,7 +42,7 @@ struct ScoreBreakdownView: View {
                 } else {
                     unavailableRow(
                         icon: "drop.fill",
-                        label: "Wassertemp. (30%)",
+                        label: "Wassertemp. (0%)",
                         message: "Messungen: Juni bis August"
                     )
                 }
@@ -85,7 +85,7 @@ struct ScoreBreakdownView: View {
 
                 Spacer()
 
-                Text(String(format: "%.1f", value))
+                Text(value.formatted(.number.precision(.fractionLength(1))))
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(AppTheme.textPrimary)
             }
@@ -147,7 +147,7 @@ struct ScoreBreakdownView: View {
         let deduction = abs(score.qualityPenalty)
         let magnitude = min(1.0, deduction / 2.0)
         let color: Color = deduction > 0 ? AppTheme.coral : AppTheme.freshGreen
-        let valueText = String(format: "%.1f", deduction)
+        let valueText = deduction.formatted(.number.precision(.fractionLength(1)))
 
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -186,7 +186,7 @@ struct ScoreBreakdownView: View {
         let deduction = abs(score.bacteriaPenalty)
         let magnitude = min(1.0, deduction / 2.8)
         let color: Color = deduction > 0 ? AppTheme.coral : AppTheme.freshGreen
-        let valueText = String(format: "%.1f", deduction)
+        let valueText = deduction.formatted(.number.precision(.fractionLength(1)))
 
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -226,22 +226,12 @@ struct ScoreBreakdownView: View {
         let bacteriaDeduction = score.hasBacteriaData ? abs(score.bacteriaPenalty) : 0.0
         let totalDeduction = qualityDeduction + bacteriaDeduction
         let unclamped = score.baseScore - totalDeduction
+        let f: (Double) -> String = { $0.formatted(.number.precision(.fractionLength(1))) }
         let equation: String = {
             if score.hasBacteriaData {
-                return String(
-                    format: "%.1f − %.1f − %.1f = %.1f",
-                    score.baseScore,
-                    qualityDeduction,
-                    bacteriaDeduction,
-                    score.total
-                )
+                return "\(f(score.baseScore)) − \(f(qualityDeduction)) − \(f(bacteriaDeduction)) = \(f(score.total))"
             } else {
-                return String(
-                    format: "%.1f − %.1f = %.1f",
-                    score.baseScore,
-                    qualityDeduction,
-                    score.total
-                )
+                return "\(f(score.baseScore)) − \(f(qualityDeduction)) = \(f(score.total))"
             }
         }()
         let wasClamped = abs(unclamped - score.total) > 0.05

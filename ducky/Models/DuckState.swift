@@ -6,6 +6,7 @@ enum DuckState: String, Equatable, CaseIterable {
     case zoegernd
     case frierend
     case warnend
+    case columbo
 
     var title: String {
         switch self {
@@ -14,16 +15,18 @@ enum DuckState: String, Equatable, CaseIterable {
         case .zoegernd:   return "Zögernd"
         case .frierend:   return "Angewidert"
         case .warnend:    return "Warnend"
+        case .columbo:    return "Columbo"
         }
     }
 
     var line: String {
         switch self {
         case .begeistert: return "REIN DA! Ducky dreht durch — PERFEKT!"
-        case .zufrieden:  return "Nicht schlecht! Ducky nickt anerkennend."
-        case .zoegernd:   return "Hm. Ducky ist skeptisch. Traust dich?"
-        case .frierend:   return "Igitt. Ducky rümpft die Nase."
+        case .zufrieden:  return "Schaut gut aus! Ducky nickt zufrieden."
+        case .zoegernd:   return "Hm. Ducky ist skeptisch. Traust du dich?"
+        case .frierend:   return "Puh. Ducky rümpft die Nase."
         case .warnend:    return "Nein. Einfach nein. Ducky streikt."
+        case .columbo:    return "Nur noch eine Sache..."
         }
     }
 
@@ -34,6 +37,7 @@ enum DuckState: String, Equatable, CaseIterable {
         case .zoegernd:   return "🤔"
         case .frierend:   return "🤢"
         case .warnend:    return "⚠️"
+        case .columbo:    return "🕵️"
         }
     }
 
@@ -61,6 +65,7 @@ enum DuckState: String, Equatable, CaseIterable {
         case .zoegernd:   return .mittel
         case .frierend:   return .schlecht
         case .warnend:    return .warnung
+        case .columbo:    return .gut
         }
     }
 
@@ -71,6 +76,7 @@ enum DuckState: String, Equatable, CaseIterable {
         case .zoegernd:   return AppTheme.sunshine.opacity(0.8)
         case .frierend:   return AppTheme.freshGreen
         case .warnend:    return AppTheme.coral
+        case .columbo:    return Color(red: 0.55, green: 0.45, blue: 0.35)
         }
     }
 }

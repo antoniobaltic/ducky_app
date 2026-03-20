@@ -10,6 +10,8 @@ struct LakeDetailView: View {
     @Environment(LakeContentService.self) private var lakeContentService
     @Environment(LakePlaceService.self) private var lakePlaceService
     @Query var favourites: [FavouriteItem]
+    @Query var allVisits: [LakeVisit]
+    @Query var allNotes: [LakeNote]
 
     init(lake: BathingWater) {
         self.lake = lake
@@ -26,9 +28,23 @@ struct LakeDetailView: View {
     @State private var showBacteriaValues = false
     @State private var appear = false
     @State private var selectedHeroQuote = ""
+    @State private var isEditingNote = false
+    @State private var showRemoveVisitConfirmation = false
+    @State private var showVisitedConfirmation = false
 
     private var isFavourite: Bool {
         favourites.contains { $0.lakeID == lake.id }
+    }
+
+    private var lakeVisits: [LakeVisit] {
+        allVisits.filter { $0.lakeID == lake.id }
+            .sorted { $0.visitedAt > $1.visitedAt }
+    }
+
+    private var hasVisited: Bool { !lakeVisits.isEmpty }
+
+    private var lakeNote: LakeNote? {
+        allNotes.first { $0.lakeID == lake.id }
     }
 
     private var currentScore: SwimScore {
@@ -46,33 +62,43 @@ struct LakeDetailView: View {
         switch level {
         case .perfekt:
             return [
-                "Oida, heit is so leiwand, i hupf glei mit Bauchfleck eini!",
-                "Sonne, Wasser, vielleicht a Bier. REIN DA!",
-                "Des is ka Badetag, des is a Staatsfeiertag für Enten."
+                "Badebedingungen vom Feinsten gerade. REIN DAAAAAA!",
+                "Sonne oben, Laune oben, Flossen oben. Ab ins Wasser!",
+                "Mega gute Badebedingungen gerade. TU ES. TU ES. TU ES.",
+                "AB INS WASSER OIDA! Nahezu perfekte Badebedingungen derzeit!",
+                "Wenn du jetzt nicht SOFORT schwimmen gehst, werd ich grantig. REIN DA!"
             ]
         case .gut:
             return [
-                "Passt scho, oida. Ned göttlich, oba ziemlich gschmeidig.",
-                "Ducky nickt wie a Kellner im Beisl. Jo, des geht fix.",
-                "A bisserl wild, a bisserl geil. I würd's machen."
+                "Passt schon richtig gut derzeit. Rein ins Wasser!",
+                "Nicht perfekt derzeit, aber schon recht fein. Kann man sehr wohl machen.",
+                "Fühlt sich gerade nach einem soliden Sprung ins Wasser an.",
+                "Allzu viel besser wird's nicht mehr. Spring rein. Tu es.",
+                "Geh eine Runde schwimmen. Vertrau mir. (Ducky gibt keine Gewähr.)"
             ]
         case .mittel:
             return [
-                "Heast, kann ma machen, muss ma aber ned.",
-                "Da Bademeister schaut skeptisch, i schau skeptisch, sogar die Badehosn schaut skeptisch.",
-                "Ziemlich mid. Aba manchmal muss ma a Risiko gehn."
+                "Naja, geht so derzeit. Kann lustig sein, kann auch wild werden.",
+                "Ich bin ein bissl skeptisch derzeit, aber nicht komplett dagegen.",
+                "Derzeit sind eher so 'wenn du magst' statt 'muss sein' Badebedingungen.",
+                "Trau dich halt. So super ist derzeit nicht, aber du bist ja Hardcore.",
+                "Als Ente würde ich es wagen. Als Mensch...?"
             ]
         case .schlecht:
             return [
-                "Brrr, oida. Des Wasser gibt da instant Gänsehaut am Popsch.",
-                "Do geh i nur mit Wärmeflasche and guada Versicherung eini.",
-                "Wennst do reingehst, brauchst danach an Tee und a Lebensentscheidung."
+                "Bleib derzeit lieber im Hoodie und iss eine fette Semmel.",
+                "Derzeit schreit alles eher nach Couch als Kopfsprung.",
+                "Wenn du jetzt baden gehst, brauchst du danach medizinische Betreuung.",
+                "Ich würde derzeit nicht baden gehen. Aber you do you.",
+                "Ich bin eine Ente und nicht mal ich würde derzeit ins Wasser gehen."
             ]
         case .warnung:
             return [
-                "Na sicher ned. Des is ka See, des is a Fehlermeldung mit Ufer.",
-                "Do zieh i die Notbremse. Oida, heit bleib ma trocken!",
-                "Do wüst eini? Na fix net. Geh ma ham Playstation zocken."
+                "Nein, derzeit fix nicht. Ich ziehe die Notbremse.",
+                "Derzeit bleibt der Schnabel trocken. Ende der Diskussion.",
+                "Absolut kein Badewetter gerade. Bleib lieber daheim.",
+                "Bleib daheim. Chill. Kein Badewetter gerade.",
+                "Denk gar nicht erst darüber nach. Bleib daheim!"
             ]
         }
     }
@@ -107,18 +133,26 @@ struct LakeDetailView: View {
         }
         .background(
             ZStack(alignment: .top) {
-                AppTheme.pageGradient
-                AppTheme.detailPageGradient(for: currentScore.level, isDark: false)
-                BubbleBackground(color: AppTheme.scoreColor(for: currentScore.level))
-                    .opacity(0.20)
+                // Water background — same colors as Entdecken screen
                 LinearGradient(
-                    colors: [.clear, AppTheme.pageBackground.opacity(0.80)],
+                    colors: [
+                        AppTheme.skyBlue.opacity(0.50),
+                        AppTheme.oceanBlue.opacity(0.35),
+                        AppTheme.oceanBlue.opacity(0.25)
+                    ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-                .ignoresSafeArea()
+
+                // Swimming fish with bubbles — only in the lower water area (below hero)
+                GeometryReader { geo in
+                    let waterTop = geo.size.height * 0.55
+                    FishView(waterWidth: geo.size.width, waterHeight: geo.size.height - waterTop)
+                        .frame(height: geo.size.height - waterTop)
+                        .offset(y: waterTop)
+                        .allowsHitTesting(false)
+                }
+                .clipped()
             }
             .ignoresSafeArea()
         )
@@ -130,25 +164,77 @@ struct LakeDetailView: View {
         .toolbar {
             ToolbarItem(placement: .iOSTopBarTrailing) {
                 HStack(spacing: 4) {
-                    Button { showShareCard = true } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 4)
+                    Button("Ich war hier", systemImage: hasVisited ? "checkmark.seal.fill" : "checkmark.seal") {
+                        if hasVisited {
+                            showRemoveVisitConfirmation = true
+                        } else {
+                            recordVisit()
+                        }
                     }
-                    Button { toggleFavourite() } label: {
-                        Image(systemName: isFavourite ? "heart.fill" : "heart")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(isFavourite ? AppTheme.warmPink : .primary)
-                            .symbolEffect(.bounce, value: isFavourite)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 4)
+                    .labelStyle(.iconOnly)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(hasVisited ? AppTheme.freshGreen : AppTheme.oceanBlue)
+                    .symbolEffect(.bounce, value: hasVisited)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+
+                    Button("Teilen", systemImage: "square.and.arrow.up") {
+                        Haptics.light()
+                        showShareCard = true
                     }
+                    .labelStyle(.iconOnly)
+                    .font(.system(size: 16, weight: .semibold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+
+                    Button("Favorit", systemImage: isFavourite ? "heart.fill" : "heart") {
+                        toggleFavourite()
+                    }
+                    .labelStyle(.iconOnly)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(isFavourite ? AppTheme.warmPink : AppTheme.oceanBlue)
+                    .symbolEffect(.bounce, value: isFavourite)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
                 }
             }
         }
         .sheet(isPresented: $showShareCard) {
             ShareCardView(lake: lake, weather: weather)
+        }
+        .sheet(isPresented: $isEditingNote) {
+            NoteEditorSheet(lakeID: lake.id, lakeName: lake.displayName, existingNote: lakeNote)
+        }
+        .overlay(alignment: .top) {
+            if showVisitedConfirmation {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .foregroundStyle(AppTheme.freshGreen)
+                    Text("See besucht!")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
+                .padding(.top, 56)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .onAppear {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(1.2))
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            showVisitedConfirmation = false
+                        }
+                    }
+                }
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showVisitedConfirmation)
+        .alert("Besuch entfernen?", isPresented: $showRemoveVisitConfirmation) {
+            Button("Ja", role: .destructive) {
+                removeVisit()
+            }
+            Button("Abbrechen", role: .cancel) {}
         }
         .task {
             isLoadingWikipedia = true
@@ -247,7 +333,7 @@ struct LakeDetailView: View {
                 ) {
                     if let airTemp = weather?.airTemperature {
                         heroNumericTemperatureValue(
-                            valueText: String(format: "%.0f", airTemp),
+                            valueText: airTemp.formatted(.number.precision(.fractionLength(0))),
                             color: AppTheme.airTempGreen
                         )
                     } else {
@@ -263,7 +349,7 @@ struct LakeDetailView: View {
                 ) {
                     if let waterTemp = lake.currentWaterTemperature {
                         heroNumericTemperatureValue(
-                            valueText: String(format: "%.1f", waterTemp),
+                            valueText: waterTemp.formatted(.number.precision(.fractionLength(1))),
                             color: AppTheme.oceanBlue
                         )
                     } else {
@@ -282,32 +368,17 @@ struct LakeDetailView: View {
                     .opacity(appear ? 1 : 0)
 
                 Text(heroQuote)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
-                    .lineSpacing(2)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .lineSpacing(3)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
                     .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        quoteBaseColor.opacity(0.54),
-                                        quoteAccentColor.opacity(0.42),
-                                        quoteBaseColor.opacity(0.40)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(AppTheme.scoreColor(for: currentScore.level))
                     )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(.white.opacity(0.34), lineWidth: 1)
-                    )
-                    .shadow(color: quoteBaseColor.opacity(0.32), radius: 7, y: 3)
-                    .shadow(color: .black.opacity(0.10), radius: 1, y: 1)
+                    .shadow(color: AppTheme.scoreColor(for: currentScore.level).opacity(0.30), radius: 10, y: 4)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .center)
@@ -319,13 +390,16 @@ struct LakeDetailView: View {
             ZStack(alignment: .bottom) {
                 AppTheme.detailHeroGradient(for: currentScore.level, isDark: false)
 
-                // Floating bubbles
-                FloatingBubblesView(count: 5, color: .white.opacity(0.25))
-                    .allowsHitTesting(false)
+                // Birds in the sky
+                GeometryReader { geo in
+                    BirdsView(skyWidth: geo.size.width, skyHeight: geo.size.height * 0.5)
+                        .allowsHitTesting(false)
+                }
 
-                // Wave at bottom of hero
-                WaterWaveView(baseColor: AppTheme.pageBackground, height: 30, speed: 0.6)
-                    .frame(height: 30)
+                // Wave at bottom of hero — same as Entdecken screen
+                WaterWaveView(baseColor: AppTheme.oceanBlue, height: 40, speed: 0.7)
+                    .frame(height: 40)
+                    .opacity(0.35)
                     .offset(y: 14)
                     .allowsHitTesting(false)
             }
@@ -385,6 +459,9 @@ struct LakeDetailView: View {
         VStack(spacing: 16) {
             quickConditionsCard
 
+            // Personal section — right after "Auf einen Blick"
+            notesCard
+
             if let wikipediaContent {
                 wikipediaCard(content: wikipediaContent)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -414,7 +491,7 @@ struct LakeDetailView: View {
     private var quickConditionsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "water.waves")
+                Image(systemName: "eye.fill")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(AppTheme.oceanBlue)
                 Text("Auf einen Blick")
@@ -436,14 +513,14 @@ struct LakeDetailView: View {
                 if let weather, let airTemp = weather.airTemperature {
                     quickConditionChip(
                         icon: "wind",
-                        value: String(format: "Luft: %.0f°C", airTemp),
+                        value: "Luft: \(airTemp.formatted(.number.precision(.fractionLength(0))))°C",
                         color: AppTheme.airTempGreen
                     )
                 }
                 if let waterTemp = lake.currentWaterTemperature {
                     quickConditionChip(
                         icon: "drop.fill",
-                        value: String(format: "Wasser: %.1f°C", waterTemp),
+                        value: "Wasser: \(waterTemp.formatted(.number.precision(.fractionLength(1))))°C",
                         color: AppTheme.oceanBlue
                     )
                 } else {
@@ -456,7 +533,7 @@ struct LakeDetailView: View {
                 if let distance = locationService.userLocation.map({ lake.distance(from: $0) }) {
                     quickConditionChip(
                         icon: "location.fill",
-                        value: String(format: "%.1f km entfernt", distance),
+                        value: "\(distance.formatted(.number.precision(.fractionLength(1)))) km entfernt",
                         color: AppTheme.teal
                     )
                 }
@@ -663,9 +740,7 @@ struct LakeDetailView: View {
     }
 
     private func triggerLightHaptic() {
-        #if canImport(UIKit)
         Haptics.light()
-        #endif
     }
 
     private var appleMapsCombinedCard: some View {
@@ -834,7 +909,7 @@ struct LakeDetailView: View {
                 if let airTemp = weather.airTemperature {
                     weatherStat(
                         icon: "wind",
-                        value: String(format: "%.0f°C", airTemp),
+                        value: "\(airTemp.formatted(.number.precision(.fractionLength(0))))°C",
                         label: "Lufttemperatur",
                         color: AppTheme.airTempGreen
                     )
@@ -852,7 +927,7 @@ struct LakeDetailView: View {
                 if let feels = weather.feelsLike {
                     weatherStat(
                         icon: "person.fill",
-                        value: String(format: "%.0f°C", feels),
+                        value: "\(feels.formatted(.number.precision(.fractionLength(0))))°C",
                         label: "Gefühlt",
                         color: AppTheme.lavender
                     )
@@ -863,7 +938,7 @@ struct LakeDetailView: View {
                 if let wind = weather.windSpeed {
                     weatherStat(
                         icon: "wind",
-                        value: String(format: "%.0f km/h", wind),
+                        value: "\(wind.formatted(.number.precision(.fractionLength(0)))) km/h",
                         label: "Wind",
                         color: AppTheme.skyBlue
                     )
@@ -933,11 +1008,11 @@ struct LakeDetailView: View {
                     forecastIcon(symbol: day.conditionSymbol)
                         .frame(height: 22)
 
-                    Text(String(format: "%.0f°", day.tempMax))
+                    Text("\(day.tempMax.formatted(.number.precision(.fractionLength(0))))°")
                         .font(.system(size: 13, weight: .heavy, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
 
-                    Text(String(format: "%.0f°", day.tempMin))
+                    Text("\(day.tempMin.formatted(.number.precision(.fractionLength(0))))°")
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(AppTheme.textSecondary.opacity(0.65))
                 }
@@ -1050,7 +1125,7 @@ struct LakeDetailView: View {
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.textPrimary)
                     Spacer()
-                    Text(String(format: "%.1f m", depth))
+                    Text("\(depth.formatted(.number.precision(.fractionLength(1)))) m")
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.skyBlue)
                     ZStack(alignment: .leading) {
@@ -1099,7 +1174,7 @@ struct LakeDetailView: View {
 
                 TrafficLightRow(
                     label: "E.Coli",
-                    value: lake.eColi.map { String(format: "%.0f KBE/100ml", $0) },
+                    value: lake.eColi.map { "\($0.formatted(.number.precision(.fractionLength(0)))) KBE/100ml" },
                     status: lake.eColiStatus,
                     showValue: showBacteriaValues
                 )
@@ -1108,7 +1183,7 @@ struct LakeDetailView: View {
 
                 TrafficLightRow(
                     label: "Enterokokken",
-                    value: lake.enterococci.map { String(format: "%.0f KBE/100ml", $0) },
+                    value: lake.enterococci.map { "\($0.formatted(.number.precision(.fractionLength(0)))) KBE/100ml" },
                     status: lake.enterococciStatus,
                     showValue: showBacteriaValues
                 )
@@ -1198,15 +1273,70 @@ struct LakeDetailView: View {
         Button { toggleFavourite() } label: {
             Image(systemName: isFavourite ? "heart.fill" : "heart")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(isFavourite ? AppTheme.warmPink : .primary)
+                .foregroundStyle(isFavourite ? AppTheme.warmPink : AppTheme.oceanBlue)
                 .symbolEffect(.bounce, value: isFavourite)
         }
     }
 
+    // MARK: - Notes Card
+
+    private var notesCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "pencil.line")
+                    .font(.system(size: 18))
+                    .foregroundStyle(AppTheme.oceanBlue)
+                Text("Deine Notizen")
+                    .font(AppTheme.cardTitle)
+                Spacer()
+                if lakeNote != nil {
+                    Button {
+                        isEditingNote = true
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppTheme.oceanBlue)
+                    }
+                }
+            }
+
+            if let note = lakeNote, !note.noteText.isEmpty {
+                Text(note.noteText)
+                    .font(AppTheme.bodyText)
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text("Zuletzt bearbeitet: \(Self.germanDateFormatter.string(from: note.updatedAt))")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppTheme.textSecondary)
+            } else {
+                Button {
+                    isEditingNote = true
+                } label: {
+                    Text("Tippe hier, um eine Notiz hinzuzufügen...")
+                        .font(AppTheme.bodyText)
+                        .foregroundStyle(AppTheme.textSecondary.opacity(0.6))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 8)
+                }
+            }
+        }
+        .padding(16)
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: AppTheme.cardRadius, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 12, y: 4)
+    }
+
+    private static let germanDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "d. MMM yyyy"
+        f.locale = Locale(identifier: "de_AT")
+        return f
+    }()
+
     // MARK: - Actions
 
     private func toggleFavourite() {
-        triggerMediumHaptic()
+        Haptics.light()
         if let existing = favourites.first(where: { $0.lakeID == lake.id }) {
             modelContext.delete(existing)
         } else {
@@ -1219,12 +1349,29 @@ struct LakeDetailView: View {
             )
             modelContext.insert(item)
         }
+        try? modelContext.save()
     }
 
-    private func triggerMediumHaptic() {
-        #if canImport(UIKit)
+    private func removeVisit() {
+        for visit in lakeVisits {
+            modelContext.delete(visit)
+        }
+        try? modelContext.save()
         Haptics.medium()
-        #endif
+    }
+
+    private func recordVisit() {
+        guard !hasVisited else { return }
+        Haptics.success()
+        let visit = LakeVisit(
+            lakeID: lake.id,
+            lakeName: lake.displayName,
+            airTemperature: weather?.airTemperature,
+            waterTemperature: lake.currentWaterTemperature
+        )
+        modelContext.insert(visit)
+        try? modelContext.save()
+        showVisitedConfirmation = true
     }
 
     private func openInMaps(using mapItem: MKMapItem?) {
@@ -1277,6 +1424,6 @@ struct CardView<Content: View>: View {
             .environment(WeatherService.shared)
             .environment(LakeContentService.shared)
             .environment(LakePlaceService.shared)
-            .modelContainer(for: FavouriteItem.self, inMemory: true)
+            .modelContainer(for: [FavouriteItem.self, LakeVisit.self, LakeNote.self], inMemory: true)
     }
 }

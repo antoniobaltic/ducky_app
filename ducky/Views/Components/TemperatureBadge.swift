@@ -69,7 +69,7 @@ struct TemperatureBadge: View {
             if let temp = temperature {
                 VStack(spacing: 4) {
                     HStack(alignment: .top, spacing: 2) {
-                        Text(String(format: "%.1f", temp))
+                        Text(temp.formatted(.number.precision(.fractionLength(1))))
                             .font(size.font)
                             .foregroundStyle(isOutdated ? color.opacity(0.5) : color)
                         Text("°C")
@@ -93,14 +93,12 @@ struct TemperatureBadge: View {
                     Image(systemName: "thermometer.medium.slash")
                         .font(.system(size: 28, weight: .medium))
                         .foregroundStyle(.secondary)
-                    Text(Season.isOffSeason ? "Keine aktuellen Daten" : "Nicht verfügbar")
+                    Text("Nicht verfügbar")
                         .font(.system(size: 15, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
-                    if Season.isOffSeason {
-                        Text("(Messungen: Juni bis August)")
-                            .font(.system(size: 12, weight: .regular, design: .rounded))
-                            .foregroundStyle(.tertiary)
-                    }
+                    Text("(Messungen: Juni bis August)")
+                        .font(.system(size: 12, weight: .regular, design: .rounded))
+                        .foregroundStyle(.tertiary)
                 }
             }
         }
@@ -108,7 +106,7 @@ struct TemperatureBadge: View {
 
     private var badgeView: some View {
         HStack(spacing: 2) {
-            Text(String(format: "%.1f", temperature ?? 0))
+            Text((temperature ?? 0).formatted(.number.precision(.fractionLength(1))))
                 .font(size.font)
             Text("°C")
                 .font(size.unitFont)

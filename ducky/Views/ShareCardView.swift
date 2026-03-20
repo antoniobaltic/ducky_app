@@ -140,9 +140,9 @@ struct ShareCardView: View {
     private var previewRenderKey: String {
         [
             String(describing: lake.id),
-            String(format: "%.2f", weather?.airTemperature ?? -999),
+            (weather?.airTemperature ?? -999).formatted(.number.precision(.fractionLength(2))),
             String(weather?.weatherCode ?? -999),
-            String(format: "%.2f", lake.currentWaterTemperature ?? -999)
+            (lake.currentWaterTemperature ?? -999).formatted(.number.precision(.fractionLength(2)))
         ].joined(separator: "|")
     }
 
@@ -265,7 +265,7 @@ struct ShareCardView: View {
 #endif
 
     private var shareText: String {
-        let scoreText = String(format: "%.1f/10", score.total)
+        let scoreText = "\(score.total.formatted(.number.precision(.fractionLength(1))))/10"
         return [
             "🦆 \(lake.displayName)",
             "\(score.level.label): \(scoreText)",
@@ -383,7 +383,7 @@ private struct LakeSharePreviewCard: View {
         if score.total == 10.0 {
             return "10"
         }
-        return String(format: "%.1f", score.total)
+        return score.total.formatted(.number.precision(.fractionLength(1)))
     }
 
     private var metadataLine: some View {
@@ -430,12 +430,12 @@ private struct LakeSharePreviewCard: View {
             temperatureChip(
                 icon: "wind",
                 iconColor: AppTheme.airTempGreen,
-                value: weather?.airTemperature.map { String(format: "%.0f°C", $0) } ?? "-"
+                value: weather?.airTemperature.map { "\($0.formatted(.number.precision(.fractionLength(0))))°C" } ?? "-"
             )
             temperatureChip(
                 icon: "drop.fill",
                 iconColor: AppTheme.oceanBlue,
-                value: lake.currentWaterTemperature.map { String(format: "%.0f°C", $0) } ?? "-"
+                value: lake.currentWaterTemperature.map { "\($0.formatted(.number.precision(.fractionLength(0))))°C" } ?? "-"
             )
             Spacer(minLength: 0)
         }

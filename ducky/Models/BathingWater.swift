@@ -88,9 +88,9 @@ struct BathingWater: Identifiable, Hashable {
            rating == "M" || rating.contains("MANGELHAFT") || rating.contains("POOR") {
             return .warnend
         }
-        // Off-season: don't interpret stale temperatures as if current
+        // Outdated temperature: fall back to neutral state
         if isTemperatureOutdated {
-            return Season.current.duckState
+            return .zufrieden
         }
         guard let temp = waterTemperature else { return .zufrieden }
         if temp > 22 { return .begeistert }
@@ -171,7 +171,7 @@ struct BathingWater: Identifiable, Hashable {
 
     var temperatureDisplay: String {
         guard let temp = waterTemperature else { return "Nicht verfügbar" }
-        return String(format: "%.1f°C", temp)
+        return "\(temp.formatted(.number.precision(.fractionLength(1))))°C"
     }
 
     var hasTemperature: Bool {

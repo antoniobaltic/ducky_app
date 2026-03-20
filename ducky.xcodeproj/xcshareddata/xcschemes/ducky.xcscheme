@@ -54,6 +54,9 @@
          identifier = "Berlin, Germany"
          referenceType = "1">
       </LocationScenarioReference>
+      <StoreKitConfigurationFileReference
+         identifier = "../../ducky/Configuration.storekit">
+      </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

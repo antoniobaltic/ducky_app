@@ -1,0 +1,119 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "F7A8B9C0-1234-5678-9ABC-DEF012345678",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "1.99",
+      "familyShareable" : false,
+      "internalID" : "D001",
+      "localizations" : [
+        {
+          "description" : "Eine Scheibe Toast für Ducky.",
+          "displayName" : "Toast",
+          "locale" : "de"
+        }
+      ],
+      "productID" : "antoniobaltic.ducky.tip.toast",
+      "referenceName" : "Ducky Tip Small",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "2.99",
+      "familyShareable" : false,
+      "internalID" : "D002",
+      "localizations" : [
+        {
+          "description" : "Eine frische Semmel für Ducky.",
+          "displayName" : "Semmel",
+          "locale" : "de"
+        }
+      ],
+      "productID" : "antoniobaltic.ducky.tip.medium",
+      "referenceName" : "Ducky Tip Medium",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "D003",
+      "localizations" : [
+        {
+          "description" : "Ein fettes Sandwich für Ducky.",
+          "displayName" : "Sandwich",
+          "locale" : "de"
+        }
+      ],
+      "productID" : "antoniobaltic.ducky.tip.large",
+      "referenceName" : "Ducky Tip Large",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : false,
+    "_billingIssuesEnabled" : false,
+    "_disableDialogs" : false,
+    "_failTransactionsEnabled" : false,
+    "_locale" : "de",
+    "_renewalBillingIssuesEnabled" : false,
+    "_storefront" : "AUT",
+    "_storeKitErrors" : [
+      {
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ],
+    "_timeRate" : 0
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

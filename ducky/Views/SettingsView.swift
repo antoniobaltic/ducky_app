@@ -19,7 +19,10 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppTheme.pageBackground.ignoresSafeArea()
+                AppTheme.settingsGradient.ignoresSafeArea()
+
+                SettingsBubblesView()
+                    .ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 28) {
@@ -35,8 +38,7 @@ struct SettingsView: View {
                     .padding(.bottom, 40)
                 }
             }
-            .navigationTitle("Einstellungen")
-            .iOSNavigationBarStyle()
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .iOSTopBarTrailing) {
                     Button("Fertig") { dismiss() }
@@ -110,7 +112,7 @@ struct SettingsView: View {
                     icon: "clock.fill",
                     label: "Letztes Update",
                     value: lastUpdateText,
-                    color: AppTheme.skyBlue
+                    color: AppTheme.oceanBlue
                 )
 
                 Divider()
@@ -179,7 +181,7 @@ struct SettingsView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "gift.fill")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(AppTheme.warmPink)
+                        .foregroundStyle(AppTheme.oceanBlue)
 
                     Text(lastTipSupportText)
                         .font(.system(size: 14, weight: .medium, design: .rounded))
@@ -225,9 +227,13 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 infoRow(icon: "drop.fill", label: "Daten", value: "AGES Badegewässer", color: AppTheme.oceanBlue)
                 Divider().padding(.leading, 62)
-                infoRow(icon: "cloud.sun.fill", label: "Wetter", value: "Open-Meteo", color: AppTheme.skyBlue)
+                infoRow(icon: "cloud.sun.fill", label: "Wetter", value: "Open-Meteo", color: AppTheme.oceanBlue)
                 Divider().padding(.leading, 62)
-                infoRow(icon: "swift", label: "Version", value: "1.0.0", color: AppTheme.coral)
+                infoRow(icon: "map.fill", label: "Karten", value: "Apple Maps", color: AppTheme.oceanBlue)
+                Divider().padding(.leading, 62)
+                infoRow(icon: "book.fill", label: "Wiki", value: "Wikipedia", color: AppTheme.oceanBlue)
+                Divider().padding(.leading, 62)
+                infoRow(icon: "swift", label: "Version", value: "1.1.0", color: AppTheme.oceanBlue)
             }
             .appCard(padding: 0)
             .padding(.horizontal, 16)
@@ -255,7 +261,7 @@ struct SettingsView: View {
                     icon: "building.2.fill",
                     title: "Impressum",
                     subtitle: "Angaben zu Anbieter, Kontakt und Haftung",
-                    color: AppTheme.teal
+                    color: AppTheme.oceanBlue
                 ) {
                     activeLegalSheet = .imprint
                 }
@@ -266,25 +272,11 @@ struct SettingsView: View {
     }
 
     private var europeSignatureSection: some View {
-        VStack(spacing: 10) {
-            WavingEUFlagView(width: 124, height: 80)
-                .padding(.top, 2)
-
-            VStack(spacing: 2) {
-                Text("Proudly made in Europe")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .multilineTextAlignment(.center)
-
-                Text("by Antonio Baltic")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .appCard()
-        .padding(.horizontal, 16)
+        Text("Made in Austria, by Antonio Baltic")
+            .font(.system(size: 13, weight: .medium, design: .rounded))
+            .foregroundStyle(AppTheme.textSecondary)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 4)
     }
 
     private var lastUpdateText: String {
@@ -321,6 +313,7 @@ struct SettingsView: View {
 
     private func refreshNow() {
         guard !isRefreshingData else { return }
+        Haptics.medium()
         isRefreshingData = true
 
         Task {
@@ -335,6 +328,7 @@ struct SettingsView: View {
 
     private func clearCache() {
         guard !isClearingCache else { return }
+        Haptics.medium()
         isClearingCache = true
 
         dataService.clearCache()
@@ -346,7 +340,7 @@ struct SettingsView: View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(AppTheme.teal)
+                .foregroundStyle(AppTheme.oceanBlue)
             Text(title)
                 .font(AppTheme.sectionTitle)
                 .foregroundStyle(AppTheme.textPrimary)
@@ -488,6 +482,62 @@ struct SettingsView: View {
         .environment(TipJarService.shared)
 }
 
+// MARK: - Settings Bubbles
+
+private struct SettingsBubbleData: Identifiable {
+    let id: Int
+    let xRatio: CGFloat
+    let size: CGFloat
+    let speed: Double
+    let startDelay: Double
+    let opacity: Double
+}
+
+struct SettingsBubblesView: View {
+    var color: Color = AppTheme.oceanBlue
+    @State private var bubbles: [SettingsBubbleData] = []
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                let now = timeline.date.timeIntervalSinceReferenceDate
+                ZStack {
+                    ForEach(bubbles) { b in
+                        let elapsed = now - b.startDelay
+                        let cycle = b.speed > 0 ? elapsed / b.speed : 0
+                        let progress = cycle.truncatingRemainder(dividingBy: 1.0)
+                        let y = h + 20 - progress * (h + 60)
+                        let wobble = sin(elapsed * 1.8 + Double(b.id)) * 12
+
+                        Circle()
+                            .fill(color.opacity(b.opacity))
+                            .frame(width: b.size, height: b.size)
+                            .position(x: b.xRatio * w + wobble, y: y)
+                    }
+                }
+            }
+        }
+        .onAppear { generateBubbles() }
+        .allowsHitTesting(false)
+    }
+
+    private func generateBubbles() {
+        let now = Date.now.timeIntervalSinceReferenceDate
+        bubbles = (0..<10).map { i in
+            SettingsBubbleData(
+                id: i,
+                xRatio: .random(in: 0.05...0.95),
+                size: .random(in: 8...28),
+                speed: .random(in: 14...24),
+                startDelay: now - .random(in: 0...20),
+                opacity: .random(in: 0.06...0.15)
+            )
+        }
+    }
+}
+
 private enum LegalDocumentType: String, Identifiable {
     case privacy
     case imprint
@@ -506,7 +556,7 @@ private struct LegalDocumentView: View {
     private enum LegalMeta {
         static let ownerName = "Antonio Baltic"
         static let appName = "Ducky"
-        static let version = "1.0.0"
+        static let version = "1.1.0"
         static let postalAddress = "Schörgelgasse 55\n8010 Graz\nÖsterreich"
         static let contactEmail = "antoniobaltic@icloud.com"
     }
@@ -514,7 +564,10 @@ private struct LegalDocumentView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppTheme.pageBackground.ignoresSafeArea()
+                AppTheme.settingsGradient.ignoresSafeArea()
+
+                SettingsBubblesView()
+                    .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 14) {
@@ -572,56 +625,72 @@ private struct LegalDocumentView: View {
                 heading: "1. Verantwortlicher",
                 lines: [
                     "\(LegalMeta.ownerName)",
-                    "Adresse:\n\(LegalMeta.postalAddress)",
-                    "Kontakt: \(LegalMeta.contactEmail)"
+                    "\(LegalMeta.postalAddress)",
+                    "E-Mail: \(LegalMeta.contactEmail)"
                 ]
             )
 
             legalCard(
                 heading: "2. Welche Daten verarbeitet die App?",
                 lines: [
-                    "Standortdaten: Nur nach deiner Freigabe, um Gewässer in deiner Nähe zu zeigen und Distanzen zu berechnen.",
-                    "Technische Anfragen: Beim Laden von Wetter-, Qualitäts- und Karteninhalten werden API-Anfragen an externe Dienste gestellt.",
-                    "Lokaler Cache: Gewässer- und Wetterdaten werden auf dem Gerät zwischengespeichert, damit die App schneller startet.",
-                    "Keine Konten, keine Tracking-ID, keine Werbung, kein Profiling."
+                    "Standort (nur mit deiner Freigabe): Wird verwendet, um Gewässer in deiner Nähe zu sortieren und Entfernungen anzuzeigen. Der Standort wird nicht gespeichert oder übertragen.",
+                    "Netzwerk-Anfragen: Beim Abruf von Wetter-, Badegewässer-, Karten- und Wikipedia-Daten werden technische Anfragen an externe Dienste gestellt. Dabei wird deine IP-Adresse übermittelt.",
+                    "Lokaler Cache: Gewässer- und Wetterdaten werden auf deinem Gerät zwischengespeichert (Caches-Verzeichnis), damit die App schneller startet.",
+                    "Lokale Nutzerdaten: Favoriten, besuchte Seen und persönliche Notizen werden ausschließlich auf deinem Gerät gespeichert (SwiftData). Es erfolgt keine Übertragung an Server.",
+                    "In-App-Käufe: Trinkgeld-Käufe werden über Apple (StoreKit) abgewickelt. Der Entwickler erhält keine persönlichen Zahlungsdaten.",
+                    "Kein Tracking, keine Werbung, keine Benutzerkonten, kein Profiling, keine Analyse-SDKs."
                 ]
             )
 
             legalCard(
-                heading: "3. Wofür und auf welcher Grundlage?",
+                heading: "3. Rechtsgrundlagen (DSGVO)",
                 lines: [
-                    "Die Verarbeitung erfolgt zur Bereitstellung der Kernfunktionen der App.",
-                    "Standortdaten nur mit deiner Einwilligung (Berechtigung in iOS).",
-                    "Sonstige Verarbeitung zur Vertragserfüllung bzw. zur technischen Funktionsfähigkeit."
+                    "Einwilligung (Art. 6 Abs. 1 lit. a): Standortzugriff — nur nach ausdrücklicher Freigabe in iOS.",
+                    "Vertragserfüllung (Art. 6 Abs. 1 lit. b): Abruf von Gewässer- und Wetterdaten zur Bereitstellung der Kernfunktionen.",
+                    "Berechtigtes Interesse (Art. 6 Abs. 1 lit. f): Lokale Zwischenspeicherung zur Verbesserung der Ladezeiten."
                 ]
             )
 
             legalCard(
-                heading: "4. Empfänger / externe Dienste",
+                heading: "4. Empfänger und externe Dienste",
                 lines: [
-                    "AGES (Badegewässerdaten)",
-                    "Open-Meteo (Wetterdaten, aktueller Stand der App)",
-                    "Wikipedia API (Wissensinhalte pro Gewässer)",
-                    "Apple Maps (Routen- und Ortsfunktionen)",
-                    "Hinweis: Dabei kann deine IP-Adresse technisch bedingt beim jeweiligen Dienst verarbeitet werden."
+                    "AGES — Österreichische Agentur für Gesundheit und Ernährungssicherheit (Badegewässerqualität)",
+                    "Open-Meteo — Wetterdaten (Open-Source-API, Server in der EU)",
+                    "Wikipedia / Wikimedia — Beschreibungen zu Gewässern (deutschsprachige API)",
+                    "Apple Maps / MapKit — Kartenanzeige, Routen und Ortssuche",
+                    "Apple StoreKit — Abwicklung von In-App-Käufen",
+                    "Hinweis: Bei diesen Anfragen kann deine IP-Adresse technisch bedingt vom jeweiligen Dienst verarbeitet werden. Es werden keine personenbezogenen Daten aktiv übermittelt."
                 ]
             )
 
             legalCard(
-                heading: "5. Speicherdauer",
+                heading: "5. Speicherdauer und Löschung",
                 lines: [
-                    "Zwischengespeicherte Gewässer- und Wetterdaten werden lokal im App-Cache gespeichert.",
-                    "Du kannst den Cache jederzeit in den Einstellungen löschen.",
-                    "Es gibt keine Benutzerkonten in der App."
+                    "Gewässer-Cache: 24 Stunden, danach automatische Aktualisierung.",
+                    "Wetter-Cache: 30 Minuten, danach automatische Aktualisierung.",
+                    "Wikipedia-Cache: 30 Tage.",
+                    "Favoriten, Besuche und Notizen: Solange die App installiert ist.",
+                    "Du kannst den Cache jederzeit in den Einstellungen löschen. Favoriten, Besuche und Notizen werden beim Deinstallieren der App gelöscht."
                 ]
             )
 
             legalCard(
                 heading: "6. Deine Rechte",
                 lines: [
-                    "Du hast Rechte auf Auskunft, Berichtigung, Löschung, Einschränkung und Datenübertragbarkeit nach DSGVO.",
-                    "Du kannst Standortzugriff jederzeit in iOS entziehen.",
-                    "Beschwerdestelle in Österreich: Datenschutzbehörde (DSB)."
+                    "Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung und Datenübertragbarkeit (Art. 15–20 DSGVO).",
+                    "Du kannst den Standortzugriff jederzeit in den iOS-Einstellungen widerrufen.",
+                    "Alle lokalen Daten kannst du durch Deinstallation der App vollständig löschen.",
+                    "Anfragen richtest du an: \(LegalMeta.contactEmail)",
+                    "Beschwerderecht: Österreichische Datenschutzbehörde (dsb.gv.at)"
+                ]
+            )
+
+            legalCard(
+                heading: "7. Sonstiges",
+                lines: [
+                    "Die App richtet sich nicht an Kinder unter 16 Jahren.",
+                    "Es findet keine automatisierte Entscheidungsfindung oder Profiling statt.",
+                    "Stand: März 2026"
                 ]
             )
         }
@@ -630,42 +699,64 @@ private struct LegalDocumentView: View {
     private var imprintContent: some View {
         Group {
             legalCard(
-                heading: "Medieninhaber & Herausgeber",
+                heading: "Angaben gemäß §5 ECG / §25 MedienG",
                 lines: [
-                    LegalMeta.ownerName,
-                    "App: \(LegalMeta.appName) (\(LegalMeta.version))"
+                    "\(LegalMeta.ownerName)",
+                    "\(LegalMeta.postalAddress)",
+                    "E-Mail: \(LegalMeta.contactEmail)"
                 ]
             )
 
             legalCard(
-                heading: "Kontakt",
+                heading: "App",
                 lines: [
-                    "Adresse:\n\(LegalMeta.postalAddress)",
-                    "E-Mail: \(LegalMeta.contactEmail)"
+                    "\(LegalMeta.appName) — Version \(LegalMeta.version)",
+                    "Plattform: iOS",
+                    "Einzelunternehmer (nicht im Firmenbuch eingetragen, keine UID-Nummer)"
                 ]
             )
 
             legalCard(
                 heading: "Unternehmensgegenstand",
                 lines: [
-                    "Entwicklung und Betrieb von Software-Produkten (Mobile Apps)."
+                    "Entwicklung und Betrieb von Software-Produkten (Mobile Apps).",
+                    "Ort der Tätigkeit: Graz, Österreich"
                 ]
             )
 
             legalCard(
                 heading: "Inhaltliche Verantwortung",
                 lines: [
-                    "Für Inhalte der App verantwortlich: \(LegalMeta.ownerName)",
-                    "Ort der inhaltlichen Tätigkeit: Graz, Österreich"
+                    "Für sämtliche Inhalte der App verantwortlich: \(LegalMeta.ownerName)",
+                    "Die in der App angezeigten Daten (Badegewässerqualität, Wetter, Karten, Wikipedia-Texte) stammen von externen Quellen und werden unverändert dargestellt."
                 ]
             )
 
             legalCard(
-                heading: "Haftung & Quellen",
+                heading: "Haftungsausschluss",
                 lines: [
                     "Trotz sorgfältiger Prüfung wird keine Gewähr für Vollständigkeit, Aktualität und Richtigkeit externer Daten übernommen.",
-                    "Die App verwendet Datenquellen und Dienste Dritter (AGES, Open-Meteo, Apple Maps, Wikipedia).",
-                    "Maßgeblich sind die Bedingungen und Verfügbarkeit der jeweiligen Anbieter."
+                    "Die App ersetzt keine offizielle Badegewässer-Beurteilung. Badeentscheidungen erfolgen auf eigene Verantwortung.",
+                    "Maßgeblich sind die Bedingungen und Verfügbarkeit der jeweiligen Drittanbieter (AGES, Open-Meteo, Apple Maps, Wikipedia)."
+                ]
+            )
+
+            legalCard(
+                heading: "Streitbeilegung",
+                lines: [
+                    "Die Europäische Kommission stellt eine Plattform zur Online-Streitbeilegung bereit: ec.europa.eu/consumers/odr",
+                    "Wir sind weder verpflichtet noch bereit, an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen."
+                ]
+            )
+
+            legalCard(
+                heading: "Urheberrecht",
+                lines: [
+                    "App-Design, Code und Texte: © 2026 \(LegalMeta.ownerName)",
+                    "Badegewässerdaten: AGES (ages.at), öffentlich zugänglich",
+                    "Wetterdaten: Open-Meteo (open-meteo.com), Open-Source",
+                    "Kartendaten: Apple Maps / MapKit",
+                    "Gewässerbeschreibungen: Wikipedia (CC BY-SA 3.0)"
                 ]
             )
         }

@@ -1,62 +1,61 @@
-# Ducky
+# Ducky — Badeseen Österreich
 
-Ducky is an iOS app for discovering bathing lakes and rivers in Austria.
+Your swim-day companion for Austrian lakes. Ducky combines live weather, water temperature, and official water quality into a single **SwimScore** (0–10) so you know instantly whether it's worth jumping in.
 
-It combines official bathing-water data, live weather, seasonal truthfulness, and a playful mascot-led interface into a clear recommendation system called `SwimScore`.
+Available on the [App Store](https://apps.apple.com/app/id6760430747).
 
 ## Features
 
-- Browse Austrian bathing waters
-- Compare lakes by current `SwimScore`
-- Explore nearby recommendations
-- View lakes on a map
-- Save favorites
-- Inspect weather, health, and quality details
-- Open routes in Apple Maps
-- Optional tip jar via StoreKit
+- **SwimScore** — one number that tells you if conditions are right
+- **260+ lakes** — all official Austrian bathing waters (AGES data)
+- **Live weather** — per-lake conditions from Open-Meteo
+- **Map & list views** — explore nearby or browse by region
+- **Favourites** — save your go-to lakes
+- **Notes** — private notes on each lake (parking, tips, favourite spots)
+- **Visit tracking** — mark lakes as visited, build your personal swim history
+- **Health data** — water quality, bacteria levels, visibility depth
+- **Wikipedia info** — background on each lake
+- **Routes** — open directions in Apple Maps
+- **Tip jar** — optional support via StoreKit 2
 
 ## Tech Stack
 
-- Swift
-- SwiftUI
-- SwiftData
-- MapKit
-- CoreLocation
-- StoreKit 2
+Swift · SwiftUI · SwiftData · MapKit · CoreLocation · StoreKit 2
+
+No third-party dependencies.
 
 ## Data Sources
 
-- AGES bathing-water data
-- Open-Meteo weather data
-- Apple Maps
-- Wikipedia
-
-## Project Structure
-
-```text
-ducky/
-  Models/
-  Services/
-  Views/
-  Assets.xcassets/
-ducky.xcodeproj/
-AGENTS.md
-README.md
-```
+| Source | What it provides |
+|--------|-----------------|
+| [AGES](https://www.ages.at) | Official bathing water quality & bacteria data |
+| [Open-Meteo](https://open-meteo.com) | Live weather per lake |
+| Apple Maps | Location search & routing |
+| Wikipedia | Lake descriptions & background info |
 
 ## Running Locally
 
-Open `ducky.xcodeproj` in Xcode and run the `ducky` scheme.
-
-CLI build:
+Open `ducky.xcodeproj` in Xcode 26+ and run the `ducky` scheme on an iOS 26 simulator.
 
 ```bash
-xcodebuild -project ducky.xcodeproj -scheme ducky -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build
+xcodebuild -project ducky.xcodeproj -scheme ducky -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' build
 ```
 
-## Notes
+## Project Structure
 
-- The product name is `Ducky`.
-- The app is currently iOS-only.
-- The repository currently has no open-source license attached.
-- Maintainer and architecture documentation lives in `AGENTS.md`.
+```
+ducky/
+  Models/       # SwiftData models (LakeNote, LakeVisit, FavouriteLake) & BathingWater
+  Services/     # Data, Weather, Location, Wikipedia, Places, TipJar
+  Views/        # SwiftUI views & components
+  Assets.xcassets/
+```
+
+## License
+
+This project is not open-source. All rights reserved.
+
+## Author
+
+**Antonio Baltic** — [antoniobaltic](https://github.com/antoniobaltic)

@@ -13,6 +13,9 @@ enum Season: String, CaseIterable {
     #if DEBUG
     /// Override for previews/testing. Set to nil for real behavior.
     nonisolated(unsafe) static var _previewOverride: Season?
+
+    /// Screenshot mode: treats last year's summer measurements as fresh
+    nonisolated(unsafe) static var _screenshotMode = false
     #endif
 
     static var current: Season {
@@ -70,6 +73,15 @@ enum Season: String, CaseIterable {
 
         // Fresh only if: measurement is from current year's Jun–Aug AND we're currently in summer
         let isFromCurrentSummer = measureYear == currentYear && (6...8).contains(measureMonth)
+
+        #if DEBUG
+        if _screenshotMode {
+            // Accept previous year's summer data too
+            let isFromRecentSummer = (measureYear == currentYear || measureYear == currentYear - 1) && (6...8).contains(measureMonth)
+            return !(isSwimmingSeason && isFromRecentSummer)
+        }
+        #endif
+
         return !(isSwimmingSeason && isFromCurrentSummer)
     }
 
@@ -79,83 +91,4 @@ enum Season: String, CaseIterable {
         return String(Calendar.current.component(.year, from: date))
     }
 
-    // MARK: - Seasonal Hero Appearance
-
-    var heroGradient: LinearGradient {
-        LinearGradient(colors: heroGradientColors, startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
-
-    var heroGradientColors: [Color] {
-        switch self {
-        case .winter:
-            return [
-                Color(red: 0.72, green: 0.84, blue: 0.96),
-                Color(red: 0.45, green: 0.60, blue: 0.82)
-            ]
-        case .spring:
-            return [
-                Color(red: 0.55, green: 0.82, blue: 0.68),
-                Color(red: 0.35, green: 0.68, blue: 0.55)
-            ]
-        case .summer:
-            return [
-                Color(red: 0.25, green: 0.58, blue: 1.0),
-                Color(red: 0.10, green: 0.40, blue: 0.90)
-            ]
-        case .autumn:
-            return [
-                Color(red: 0.90, green: 0.68, blue: 0.42),
-                Color(red: 0.75, green: 0.48, blue: 0.30)
-            ]
-        }
-    }
-
-    var waveColor: Color {
-        switch self {
-        case .winter: return Color(red: 0.72, green: 0.84, blue: 0.96)
-        case .spring: return AppTheme.freshGreen
-        case .summer: return .white
-        case .autumn: return Color(red: 0.90, green: 0.68, blue: 0.42)
-        }
-    }
-
-    var duckState: DuckState {
-        switch self {
-        case .winter:  return .frierend
-        case .spring:  return .zoegernd
-        case .summer:  return .zufrieden
-        case .autumn:  return .zoegernd
-        }
-    }
-
-    var heroTitle: String {
-        switch self {
-        case .winter:  return "Winterpause"
-        case .spring:  return "Bald geht's los!"
-        case .summer:  return "" // Summer uses dynamic time-of-day greeting
-        case .autumn:  return "Saison vorbei"
-        }
-    }
-
-    var heroMessage: String {
-        switch self {
-        case .winter:
-            return "Es ist EISKALT. Ducky liegt im Bett und weigert sich."
-        case .spring:
-            return "Noch zu frisch. Ducky wartet ungeduldig. Neue Daten ab Juni!"
-        case .summer:
-            return "" // Summer uses data-driven messaging
-        case .autumn:
-            return "Saison vorbei. Ducky trauert. Temperaturen sind vom letzten Sommer."
-        }
-    }
-
-    var heroIcon: String {
-        switch self {
-        case .winter:  return "snowflake"
-        case .spring:  return "leaf.fill"
-        case .summer:  return "sun.max.fill"
-        case .autumn:  return "leaf.fill"
-        }
-    }
 }

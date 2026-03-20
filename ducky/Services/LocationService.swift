@@ -2,6 +2,7 @@ import Foundation
 import CoreLocation
 import Observation
 
+@MainActor
 @Observable
 final class LocationService: NSObject, CLLocationManagerDelegate {
     var userLocation: CLLocation?
