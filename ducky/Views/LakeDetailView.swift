@@ -55,7 +55,7 @@ struct LakeDetailView: View {
         if !selectedHeroQuote.isEmpty {
             return selectedHeroQuote
         }
-        return heroQuotes(for: currentScore.level).first ?? currentScore.duckState.line
+        return heroQuotes(for: currentScore.level)[0]
     }
 
     private func heroQuotes(for level: SwimScore.Level) -> [String] {
@@ -104,7 +104,7 @@ struct LakeDetailView: View {
     }
 
     private func randomHeroQuote(for level: SwimScore.Level) -> String {
-        heroQuotes(for: level).randomElement() ?? currentScore.duckState.line
+        heroQuotes(for: level).randomElement()!
     }
 
     private var quoteBaseColor: Color {

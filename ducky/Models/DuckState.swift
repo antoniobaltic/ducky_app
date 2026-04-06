@@ -19,17 +19,6 @@ enum DuckState: String, Equatable, CaseIterable {
         }
     }
 
-    var line: String {
-        switch self {
-        case .begeistert: return "REIN DA! Ducky dreht durch — PERFEKT!"
-        case .zufrieden:  return "Schaut gut aus! Ducky nickt zufrieden."
-        case .zoegernd:   return "Hm. Ducky ist skeptisch. Traust du dich?"
-        case .frierend:   return "Puh. Ducky rümpft die Nase."
-        case .warnend:    return "Nein. Einfach nein. Ducky streikt."
-        case .columbo:    return "Nur noch eine Sache..."
-        }
-    }
-
     var emoji: String {
         switch self {
         case .begeistert: return "🤩"

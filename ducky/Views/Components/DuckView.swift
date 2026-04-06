@@ -916,11 +916,6 @@ struct DuckView: View {
                     DuckView(state: state, size: 110)
                     Text(state.title)
                         .font(AppTheme.cardTitle)
-                    Text(state.line)
-                        .font(AppTheme.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(width: 140)
                 }
                 .padding()
                 .background(state.backgroundGradient, in: RoundedRectangle(cornerRadius: 20))

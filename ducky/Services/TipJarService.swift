@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import StoreKit
+import RevenueCat
 
 @MainActor
 @Observable
@@ -11,7 +11,27 @@ final class TipJarService {
         let suiteName = "TipJarServicePreview"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
-        return TipJarService(defaults: defaults)
+        let instance = TipJarService(defaults: defaults, isPreview: true)
+        instance.products = Self.tipCatalog.map {
+            TipProduct(
+                id: $0.id,
+                displayName: $0.suggestedDisplayName,
+                displayPrice: "—",
+                description: $0.suggestedDescription,
+                package: nil
+            )
+        }
+        return instance
+    }
+
+    // MARK: - Types
+
+    struct TipProduct: Identifiable {
+        let id: String
+        let displayName: String
+        let displayPrice: String
+        let description: String
+        let package: Package?
     }
 
     struct TipProductDefinition: Identifiable {
@@ -27,6 +47,8 @@ final class TipJarService {
         case pending
         case failed
     }
+
+    // MARK: - Product Catalog
 
     nonisolated static let tipCatalog: [TipProductDefinition] = [
         .init(
@@ -52,6 +74,8 @@ final class TipJarService {
     nonisolated static let tipProductIDs = tipCatalog.map(\.id)
     nonisolated private static let tipProductIDSet = Set(tipProductIDs)
 
+    // MARK: - State
+
     private enum Keys {
         static let launchCount = "tipJar.launchCount"
         static let lastPromptDate = "tipJar.lastPromptDate"
@@ -61,7 +85,7 @@ final class TipJarService {
         static let lastRecordedTransactionID = "tipJar.lastRecordedTransactionID"
     }
 
-    var products: [Product] = []
+    var products: [TipProduct] = []
     var isLoadingProducts = false
     var purchaseInFlightProductID: String?
     var purchaseNotice: String?
@@ -72,29 +96,34 @@ final class TipJarService {
     var totalTipCount: Int
 
     private let defaults: UserDefaults
-    private var updatesTask: Task<Void, Never>?
+    private let isPreview: Bool
     private var hasConfigured = false
-    private var lastRecordedTransactionID: UInt64
+    private var lastRecordedTransactionID: String
 
     private let minLaunchesBeforePrompt = 6
     private let promptCooldown: TimeInterval = 14 * 24 * 60 * 60
     private let postTipPromptCooldown: TimeInterval = 45 * 24 * 60 * 60
 
-    private init(defaults: UserDefaults = .standard) {
+    // MARK: - Init
+
+    private init(defaults: UserDefaults = .standard, isPreview: Bool = false) {
         self.defaults = defaults
+        self.isPreview = isPreview
         launchCount = defaults.integer(forKey: Keys.launchCount)
         promptsEnabled = defaults.object(forKey: Keys.promptsEnabled) as? Bool ?? true
         lastTipDate = defaults.object(forKey: Keys.lastTipDate) as? Date
         totalTipCount = defaults.integer(forKey: Keys.totalTipCount)
-        let storedID = defaults.string(forKey: Keys.lastRecordedTransactionID)
-        lastRecordedTransactionID = storedID.flatMap(UInt64.init) ?? 0
+        lastRecordedTransactionID = defaults.string(forKey: Keys.lastRecordedTransactionID) ?? ""
     }
+
+    // MARK: - Configuration
 
     func configureIfNeeded() {
         guard !hasConfigured else { return }
         hasConfigured = true
-        startTransactionListener()
     }
+
+    // MARK: - Products
 
     func loadProductsIfNeeded() async {
         guard products.isEmpty else { return }
@@ -102,17 +131,36 @@ final class TipJarService {
     }
 
     func loadProducts() async {
-        guard !isLoadingProducts else { return }
+        guard !isPreview, !isLoadingProducts else { return }
 
         isLoadingProducts = true
         purchaseError = nil
         defer { isLoadingProducts = false }
 
         do {
-            let fetched = try await Product.products(for: Self.tipProductIDs)
-            products = fetched.sorted { $0.price < $1.price }
+            let offerings = try await Purchases.shared.offerings()
+            guard let offering = offerings.offering(identifier: "tip_jar") else {
+                purchaseError = "Trinkgeld-Optionen sind gerade noch nicht verfuegbar."
+                #if DEBUG
+                print("RevenueCat: 'tip_jar' offering not found")
+                #endif
+                return
+            }
 
-            let missingIDs = Self.tipProductIDSet.subtracting(fetched.map(\.id)).sorted()
+            products = offering.availablePackages
+                .map { pkg in
+                    TipProduct(
+                        id: pkg.storeProduct.productIdentifier,
+                        displayName: pkg.storeProduct.localizedTitle,
+                        displayPrice: pkg.storeProduct.localizedPriceString,
+                        description: pkg.storeProduct.localizedDescription,
+                        package: pkg
+                    )
+                }
+                .sorted { ($0.package?.storeProduct.price ?? 0) < ($1.package?.storeProduct.price ?? 0) }
+
+            let loadedIDs = Set(products.map(\.id))
+            let missingIDs = Self.tipProductIDSet.subtracting(loadedIDs).sorted()
             if !missingIDs.isEmpty {
                 purchaseError = "Trinkgeld-Optionen sind gerade noch nicht verfuegbar."
                 #if DEBUG
@@ -124,8 +172,10 @@ final class TipJarService {
         }
     }
 
-    func purchase(_ product: Product) async -> PurchaseOutcome {
-        guard purchaseInFlightProductID == nil else { return .failed }
+    // MARK: - Purchase
+
+    func purchase(_ product: TipProduct) async -> PurchaseOutcome {
+        guard purchaseInFlightProductID == nil, let package = product.package else { return .failed }
 
         purchaseInFlightProductID = product.id
         purchaseNotice = nil
@@ -133,31 +183,25 @@ final class TipJarService {
         defer { purchaseInFlightProductID = nil }
 
         do {
-            let result = try await product.purchase()
-            switch result {
-            case .success(let verification):
-                let transaction = switch verification {
-                case .verified(let t): t
-                case .unverified(let t, _): t
-                }
-                await transaction.finish()
-                recordSuccessfulTip(transactionID: transaction.id)
+            let (transaction, _, userCancelled) = try await Purchases.shared.purchase(package: package)
+            if userCancelled { return .cancelled }
+            if let transaction {
+                recordSuccessfulTip(transactionID: transaction.transactionIdentifier)
                 purchaseNotice = "Vielen Dank! Du hast einen wertvollen Beitrag zu Duckys Wohlbefinden geleistet."
                 return .success
-            case .pending:
+            }
+            return .failed
+        } catch {
+            if let rcError = error as? RevenueCat.ErrorCode, rcError == .paymentPendingError {
                 purchaseNotice = "Zahlung ist ausstehend."
                 return .pending
-            case .userCancelled:
-                return .cancelled
-            @unknown default:
-                purchaseError = "Unbekanntes Kauf-Ergebnis."
-                return .failed
             }
-        } catch {
             purchaseError = "Kauf fehlgeschlagen. Versuch es später erneut."
             return .failed
         }
     }
+
+    // MARK: - Prompt Logic
 
     func registerAppLaunch() {
         launchCount += 1
@@ -193,24 +237,9 @@ final class TipJarService {
         defaults.set(enabled, forKey: Keys.promptsEnabled)
     }
 
-    private func startTransactionListener() {
-        guard updatesTask == nil else { return }
+    // MARK: - Tip Recording
 
-        updatesTask = Task(priority: .background) { [weak self] in
-            for await update in Transaction.updates {
-                guard case .verified(let transaction) = update else { continue }
-                guard Self.tipProductIDSet.contains(transaction.productID) else { continue }
-                await transaction.finish()
-                await self?.recordSuccessfulTipFromListener(transactionID: transaction.id)
-            }
-        }
-    }
-
-    private func recordSuccessfulTipFromListener(transactionID: UInt64) {
-        recordSuccessfulTip(transactionID: transactionID)
-    }
-
-    private func recordSuccessfulTip(transactionID: UInt64, now: Date = Date()) {
+    private func recordSuccessfulTip(transactionID: String, now: Date = Date()) {
         guard transactionID != lastRecordedTransactionID else { return }
         lastRecordedTransactionID = transactionID
 
@@ -220,19 +249,6 @@ final class TipJarService {
         defaults.set(now, forKey: Keys.lastTipDate)
         defaults.set(totalTipCount, forKey: Keys.totalTipCount)
         defaults.set(now, forKey: Keys.lastPromptDate)
-        defaults.set(String(transactionID), forKey: Keys.lastRecordedTransactionID)
-    }
-
-    private static func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
-        switch result {
-        case .unverified:
-            throw StoreError.failedVerification
-        case .verified(let safe):
-            return safe
-        }
-    }
-
-    enum StoreError: Error {
-        case failedVerification
+        defaults.set(transactionID, forKey: Keys.lastRecordedTransactionID)
     }
 }

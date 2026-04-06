@@ -128,8 +128,9 @@ struct HomeView: View {
             return "Moment, ich mache im Hintergrund noch einen Frische-Check."
         }
 
-        if let avg = cachedAverageScore {
-            return cachedAverageHeroMessage ?? Self.randomizedHeroMessage(for: avg.level)
+        let heroScore = cachedNearbyAverageScore ?? cachedAverageScore
+        if let score = heroScore {
+            return cachedAverageHeroMessage ?? Self.randomizedHeroMessage(for: score.level)
         }
 
         return "Ich lade gerade die Wetterdaten nach."
@@ -280,17 +281,7 @@ struct HomeView: View {
                 } else {
                     cachedAverageScore = nil
                 }
-                if let level = cachedAverageScore?.level {
-                    if cachedAverageHeroLevel != level || cachedAverageHeroMessage == nil {
-                        cachedAverageHeroMessage = Self.randomizedHeroMessage(for: level)
-                        cachedAverageHeroLevel = level
-                    }
-                } else {
-                    cachedAverageHeroLevel = nil
-                    cachedAverageHeroMessage = nil
-                }
-
-                // Nearby average: 5 closest lakes → drives home screen Ducky state
+                // Nearby average: 5 closest lakes → drives home screen Ducky state + message
                 if let userLocation = locationService.userLocation {
                     let nearbyScored = allLakes
                         .map { ($0, $0.distance(from: userLocation)) }
@@ -308,6 +299,18 @@ struct HomeView: View {
                     }
                 } else {
                     cachedNearbyAverageScore = nil
+                }
+
+                // Hero message: use nearby score if available, otherwise global
+                let heroLevel = (cachedNearbyAverageScore ?? cachedAverageScore)?.level
+                if let level = heroLevel {
+                    if cachedAverageHeroLevel != level || cachedAverageHeroMessage == nil {
+                        cachedAverageHeroMessage = Self.randomizedHeroMessage(for: level)
+                        cachedAverageHeroLevel = level
+                    }
+                } else {
+                    cachedAverageHeroLevel = nil
+                    cachedAverageHeroMessage = nil
                 }
             }
         }

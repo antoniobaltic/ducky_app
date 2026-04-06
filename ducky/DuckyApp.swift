@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import RevenueCat
 
 @main
 struct DuckyApp: App {
@@ -13,6 +14,9 @@ struct DuckyApp: App {
             WeatherService.shared.isScreenshotMode = true
         }
         #endif
+
+        Purchases.logLevel = .warn
+        Purchases.configure(withAPIKey: "appl_DdxBtpWoeADYapLDIVrhZGbReYr")
     }
 
     var body: some Scene {

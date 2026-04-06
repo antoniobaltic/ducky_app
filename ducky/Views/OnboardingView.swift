@@ -1,6 +1,5 @@
 import SwiftUI
 import CoreLocation
-import StoreKit
 #if os(iOS)
 import UIKit
 #endif
@@ -590,7 +589,7 @@ struct OnboardingView: View {
         }
     }
 
-    private func tipButton(product: Product) -> some View {
+    private func tipButton(product: TipJarService.TipProduct) -> some View {
         let isPurchasing = tipJarService.purchaseInFlightProductID == product.id
 
         return Button {
@@ -703,26 +702,26 @@ struct OnboardingView: View {
 #Preview {
     OnboardingView(hasCompletedOnboarding: .constant(false))
         .environment(LocationService.shared)
-        .environment(TipJarService.shared)
+        .environment(TipJarService.previewInstance())
 }
 
 #Preview("Onboarding - Seite 1 (SE)") {
     OnboardingView(hasCompletedOnboarding: .constant(false), initialPage: 0)
         .environment(LocationService.shared)
-        .environment(TipJarService.shared)
+        .environment(TipJarService.previewInstance())
         .frame(width: 320, height: 700)
 }
 
 #Preview("Onboarding - Seite 2 (SE)") {
     OnboardingView(hasCompletedOnboarding: .constant(false), initialPage: 1)
         .environment(LocationService.shared)
-        .environment(TipJarService.shared)
+        .environment(TipJarService.previewInstance())
         .frame(width: 320, height: 700)
 }
 
 #Preview("Onboarding - Seite 3 (SE)") {
     OnboardingView(hasCompletedOnboarding: .constant(false), initialPage: 2)
         .environment(LocationService.shared)
-        .environment(TipJarService.shared)
+        .environment(TipJarService.previewInstance())
         .frame(width: 320, height: 700)
 }

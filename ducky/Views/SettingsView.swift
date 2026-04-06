@@ -479,7 +479,7 @@ struct SettingsView: View {
     SettingsView()
         .environment(DataService.shared)
         .environment(WeatherService.shared)
-        .environment(TipJarService.shared)
+        .environment(TipJarService.previewInstance())
 }
 
 // MARK: - Settings Bubbles
@@ -637,8 +637,8 @@ private struct LegalDocumentView: View {
                     "Netzwerk-Anfragen: Beim Abruf von Wetter-, Badegewässer-, Karten- und Wikipedia-Daten werden technische Anfragen an externe Dienste gestellt. Dabei wird deine IP-Adresse übermittelt.",
                     "Lokaler Cache: Gewässer- und Wetterdaten werden auf deinem Gerät zwischengespeichert (Caches-Verzeichnis), damit die App schneller startet.",
                     "Lokale Nutzerdaten: Favoriten, besuchte Seen und persönliche Notizen werden ausschließlich auf deinem Gerät gespeichert (SwiftData). Es erfolgt keine Übertragung an Server.",
-                    "In-App-Käufe: Trinkgeld-Käufe werden über Apple (StoreKit) abgewickelt. Der Entwickler erhält keine persönlichen Zahlungsdaten.",
-                    "Kein Tracking, keine Werbung, keine Benutzerkonten, kein Profiling, keine Analyse-SDKs."
+                    "In-App-Käufe: Trinkgeld-Käufe werden über Apple StoreKit und RevenueCat abgewickelt. RevenueCat verarbeitet anonyme Kaufdaten zur Umsatzanalyse. Der Entwickler erhält keine persönlichen Zahlungsdaten.",
+                    "Kein Tracking, keine Werbung, keine Benutzerkonten, kein Profiling."
                 ]
             )
 
@@ -659,6 +659,7 @@ private struct LegalDocumentView: View {
                     "Wikipedia / Wikimedia — Beschreibungen zu Gewässern (deutschsprachige API)",
                     "Apple Maps / MapKit — Kartenanzeige, Routen und Ortssuche",
                     "Apple StoreKit — Abwicklung von In-App-Käufen",
+                    "RevenueCat — Verwaltung und Analyse von In-App-Käufen (Server in den USA, DSGVO-konform)",
                     "Hinweis: Bei diesen Anfragen kann deine IP-Adresse technisch bedingt vom jeweiligen Dienst verarbeitet werden. Es werden keine personenbezogenen Daten aktiv übermittelt."
                 ]
             )
@@ -690,7 +691,7 @@ private struct LegalDocumentView: View {
                 lines: [
                     "Die App richtet sich nicht an Kinder unter 16 Jahren.",
                     "Es findet keine automatisierte Entscheidungsfindung oder Profiling statt.",
-                    "Stand: März 2026"
+                    "Stand: April 2026"
                 ]
             )
         }
@@ -737,7 +738,7 @@ private struct LegalDocumentView: View {
                 lines: [
                     "Trotz sorgfältiger Prüfung wird keine Gewähr für Vollständigkeit, Aktualität und Richtigkeit externer Daten übernommen.",
                     "Die App ersetzt keine offizielle Badegewässer-Beurteilung. Badeentscheidungen erfolgen auf eigene Verantwortung.",
-                    "Maßgeblich sind die Bedingungen und Verfügbarkeit der jeweiligen Drittanbieter (AGES, Open-Meteo, Apple Maps, Wikipedia)."
+                    "Maßgeblich sind die Bedingungen und Verfügbarkeit der jeweiligen Drittanbieter (AGES, Open-Meteo, Apple Maps, Wikipedia, RevenueCat)."
                 ]
             )
 

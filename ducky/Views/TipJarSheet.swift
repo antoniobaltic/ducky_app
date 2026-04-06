@@ -1,5 +1,4 @@
 import SwiftUI
-import StoreKit
 
 struct TipJarSheet: View {
     enum EntryPoint {
@@ -128,7 +127,7 @@ struct TipJarSheet: View {
         }
     }
 
-    private func promptTipButton(product: Product) -> some View {
+    private func promptTipButton(product: TipJarService.TipProduct) -> some View {
         let isPurchasing = tipJarService.purchaseInFlightProductID == product.id
         return Button {
             guard !isPurchasing else { return }
@@ -343,7 +342,7 @@ struct TipJarSheet: View {
         .appCard()
     }
 
-    private func tipProductButton(_ product: Product) -> some View {
+    private func tipProductButton(_ product: TipJarService.TipProduct) -> some View {
         let isActivePurchase = tipJarService.purchaseInFlightProductID == product.id
         return Button {
             guard !isActivePurchase else { return }
@@ -430,10 +429,10 @@ struct TipJarSheet: View {
 
 #Preview("From Settings") {
     TipJarSheet(entryPoint: .settings)
-        .environment(TipJarService.shared)
+        .environment(TipJarService.previewInstance())
 }
 
 #Preview("Prompt") {
     TipJarSheet(entryPoint: .prompt)
-        .environment(TipJarService.shared)
+        .environment(TipJarService.previewInstance())
 }
